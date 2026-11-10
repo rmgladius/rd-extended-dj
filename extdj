@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Atalho para rodar o extdj com o ambiente fora do disco do Windows (WSL).
+export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$HOME/.venvs/extended-dj}"
+exec uv run --project "$(dirname "$(readlink -f "$0")")" -q extdj "$@"
