@@ -6,11 +6,12 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 
-from .config import SR
+from .config import CONGELADO, SR, pasta_programa
 
 FORMATOS = ("wav", "aiff", "flac", "mp3")
 TAGS_COPIADAS = {
@@ -20,12 +21,26 @@ TAGS_COPIADAS = {
 EXTENSOES_AUDIO = {".mp3", ".flac", ".wav", ".aif", ".aiff", ".m4a", ".aac", ".ogg", ".opus", ".wma"}
 
 
+# No Windows, cada chamada do ffmpeg abriria uma janela de console por um instante.
+_SEM_JANELA = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
+
+
 def _exe(nome: str) -> str:
     env = os.environ.get("EXTDJ_" + nome.upper())
-    exe = env or shutil.which(nome)
+    if env:
+        return env
+    if CONGELADO:
+        junto = pasta_programa() / "ffmpeg" / (nome + (".exe" if sys.platform == "win32" else ""))
+        if junto.exists():
+            return str(junto)
+    exe = shutil.which(nome)
     if not exe:
         raise RuntimeError(f"{nome} não encontrado. Instale o ffmpeg e deixe no PATH.")
     return exe
+
+
+def _rodar(cmd: list[str], entrada: bytes | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, input=entrada, capture_output=True, **_SEM_JANELA)
 
 
 def carregar(caminho: Path | str, sr: int = SR) -> np.ndarray:
@@ -34,7 +49,7 @@ def carregar(caminho: Path | str, sr: int = SR) -> np.ndarray:
         _exe("ffmpeg"), "-v", "error", "-nostdin", "-i", str(caminho),
         "-map", "0:a:0", "-ac", "2", "-ar", str(sr), "-f", "f32le", "-acodec", "pcm_f32le", "-",
     ]
-    r = subprocess.run(cmd, capture_output=True)
+    r = _rodar(cmd)
     if r.returncode != 0 or not r.stdout:
         erro = r.stderr.decode(errors="replace").strip()
         raise RuntimeError(f"Não consegui ler {caminho}: {erro}")
@@ -44,7 +59,7 @@ def carregar(caminho: Path | str, sr: int = SR) -> np.ndarray:
 def ler_tags(caminho: Path | str) -> dict[str, str]:
     """Tags do arquivo com as chaves em minúsculas (title, artist, album...)."""
     cmd = [_exe("ffprobe"), "-v", "error", "-show_entries", "format_tags", "-of", "json", str(caminho)]
-    r = subprocess.run(cmd, capture_output=True)
+    r = _rodar(cmd)
     if r.returncode != 0:
         return {}
     try:
@@ -91,7 +106,7 @@ def salvar(
         cmd += ["-c:a", "libmp3lame", "-b:a", "320k", "-id3v2_version", "3"]
     cmd.append(str(caminho))
     dados = np.ascontiguousarray(audio, dtype="<f4").tobytes()
-    r = subprocess.run(cmd, input=dados, capture_output=True)
+    r = _rodar(cmd, dados)
     if r.returncode != 0:
         raise RuntimeError(f"Não consegui gravar {caminho}: {r.stderr.decode(errors='replace').strip()}")
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -69,7 +70,17 @@ def _caminho_cache(caminho: Path) -> Path:
     return pasta_cache() / "analise" / f"{stems.chave_arquivo(caminho)}.json"
 
 
-def analisar(caminho: Path, dispositivo: str, usar_cache: bool = True) -> Faixa:
+# (etapa, fração da análise inteira, de 0 a 1)
+Progresso = Callable[[str, float], None]
+
+
+def _nada(etapa: str, fracao: float) -> None:
+    pass
+
+
+def analisar(caminho: Path, dispositivo: str, usar_cache: bool = True,
+             progresso: Progresso | None = None) -> Faixa:
+    avisa = progresso or _nada
     tempos: dict[str, float] = {}
     t = time.perf_counter()
 
@@ -79,9 +90,12 @@ def analisar(caminho: Path, dispositivo: str, usar_cache: bool = True) -> Faixa:
         tempos[nome] = round(agora - t, 2)
         t = agora
 
+    avisa("lendo o arquivo", 0.0)
     sinal = au.carregar(caminho)
     marca("leitura")
-    st = stems.obter(caminho, sinal, dispositivo)
+    avisa("separando bateria, baixo e voz", 0.03)
+    st = stems.obter(caminho, sinal, dispositivo,
+                     lambda x: avisa("separando bateria, baixo e voz", 0.03 + 0.77 * x))
     marca("stems")
 
     mix = au.mono(sinal)
@@ -101,6 +115,7 @@ def analisar(caminho: Path, dispositivo: str, usar_cache: bool = True) -> Faixa:
         rms_bat = np.asarray(salvo["rms_bateria"])
         marca("cache")
     else:
+        avisa("achando as batidas", 0.80)
         batidas, primeiros = detectar_batidas(mix, SR, dispositivo)
         marca("batidas")
         grade = ajustar_grade(batidas, primeiros, len(mix) / SR, envelope_ataques(bateria, SR))
@@ -109,6 +124,7 @@ def analisar(caminho: Path, dispositivo: str, usar_cache: bool = True) -> Faixa:
         rms_mix = cp.rms_db(mix, grade, SR)
         rms_bat = cp.rms_db(bateria, grade, SR)
         marca("compassos")
+        avisa("medindo tom e estilo", 0.88)
         harmonico = au.mono(st["bass"] + st["other"] + 0.5 * st["vocals"])
         tonalidade = tom.estimar(harmonico, SR)
         marca("tom")
@@ -151,6 +167,7 @@ def analisar(caminho: Path, dispositivo: str, usar_cache: bool = True) -> Faixa:
     info["voz_compasso"] = int(com_voz[0] - entrada + 1) if len(com_voz) else None
     info["voz_s"] = round(grade.compassos[com_voz[0]], 2) if len(com_voz) else None
     info["compassos_musica"] = int(saida - entrada)
+    avisa("pronta", 1.0)
 
     return Faixa(
         caminho=caminho, audio=sinal, stems=st, grade=grade, info=info, voz=voz,

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import pasta_cache
+from .config import modelo_embutido, pasta_cache
 
 BASE = "https://essentia.upf.edu/models/feature-extractors/discogs-effnet/"
 ARQ_MODELO = "discogs-effnet-bsdynamic-1.onnx"
@@ -24,6 +24,9 @@ _classes: list[str] | None = None
 
 
 def _baixar(nome: str) -> Path:
+    junto = modelo_embutido(nome)
+    if junto:
+        return junto
     destino = pasta_cache() / "modelos" / nome
     if not destino.exists():
         destino.parent.mkdir(parents=True, exist_ok=True)

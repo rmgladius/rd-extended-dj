@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
-import re
 import sys
 import time
 import warnings
 from pathlib import Path
 
 from . import audio as au
-from .config import SR, dispositivo
+from .config import dispositivo
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -23,20 +21,6 @@ def _num(x: float | None, casas: int = 2) -> str:
     if x is None:
         return ""
     return f"{x:.{casas}f}".replace(".", ",")
-
-
-def _bpm_tag(bpm: float) -> str:
-    return str(round(bpm)) if abs(bpm - round(bpm)) < 0.05 else f"{bpm:.1f}"
-
-
-def _nome_seguro(nome: str) -> str:
-    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", nome).strip().rstrip(".")
-
-
-def _base(info: dict, caminho: Path) -> str:
-    if info.get("artista") and info.get("titulo"):
-        return _nome_seguro(f"{info['artista']} - {info['titulo']}")
-    return _nome_seguro(caminho.stem)
 
 
 def _resumo(info: dict, grade) -> str:
@@ -109,6 +93,7 @@ def cmd_analisar(args) -> int:
 
 def cmd_estender(args) -> int:
     from .analise import analisar
+    from .exportar import gravar
     from .extender import NOMES_MODO, Fontes, escolher, montar
 
     arquivos = au.listar(args.entradas)
@@ -132,19 +117,7 @@ def cmd_estender(args) -> int:
                 outro = escolher(f, fontes, "outro", args.outro, args.loop,
                                  args.modo_outro or args.modo, args.inicio_outro)
             sinal, meta = montar(f, fontes, intro, outro)
-            base = _base(f.info, arq) + " (Extended)"
-            destino = saida / f"{base}.{args.formato}"
-            tags = {
-                "title": (f.info.get("titulo") or arq.stem) + " (Extended)",
-                "TBPM": _bpm_tag(f.grade.bpm),
-                "TKEY": f.info["tom"]["tom"],
-                "comment": "extdj: " + ", ".join(
-                    f"{e.lado} {e.compassos} compassos ({NOMES_MODO[e.modo]})" for e in (intro, outro) if e),
-            }
-            au.salvar(destino, sinal, SR, args.formato, origem=arq, tags=tags)
-            meta.update({"arquivo_original": arq.name, "tom": f.info["tom"], "estilos": f.info["estilos"]})
-            destino.with_suffix(".extdj.json").write_text(
-                json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+            destino = gravar(f, sinal, meta, intro, outro, saida, args.formato)
         except Exception as e:
             erros += 1
             print(f"[{i}/{len(arquivos)}] {arq.name}: ERRO {e}")

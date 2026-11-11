@@ -64,7 +64,11 @@ def detectar_batidas(mono: np.ndarray, sr: int, dispositivo: str) -> tuple[np.nd
     from beat_this.inference import Audio2Beats
 
     if _modelo_batidas is None:
-        _modelo_batidas = Audio2Beats(checkpoint_path="final0", device=dispositivo, dbn=False)
+        from .config import modelo_embutido
+
+        local = modelo_embutido("beat_this-final0.ckpt")
+        _modelo_batidas = Audio2Beats(checkpoint_path=str(local) if local else "final0",
+                                      device=dispositivo, dbn=False)
     batidas, primeiros = _modelo_batidas(mono.astype(np.float64), sr)
     return np.asarray(batidas, dtype=float), np.asarray(primeiros, dtype=float)
 

@@ -54,7 +54,7 @@ class Fontes:
         self.f = faixa
         self._cache: dict[str, np.ndarray] = {}
         self._impressoes: dict[str, np.ndarray] = {}
-        self._ataques: tuple[np.ndarray, np.ndarray] | None = None
+        self._ataques: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
 
     def __getitem__(self, nome: str) -> np.ndarray:
         if nome not in self._cache:
@@ -72,17 +72,50 @@ class Fontes:
             self._cache[nome] = x
         return self._cache[nome]
 
-    def ataques(self) -> tuple[np.ndarray, np.ndarray]:
-        """Envelope de ataques da bateria, ~1,5 ms por quadro."""
-        if self._ataques is None:
-            env, seg = envelope_ataques(self.f.stems["drums"].mean(axis=1), SR, hop=64)
-            self._ataques = (np.arange(len(env)) * seg, env)
-        return self._ataques
+    def ataques(self, t0: float, t1: float) -> tuple[np.ndarray, np.ndarray]:
+        """Envelope de ataques da bateria entre t0 e t1 (s), ~1,5 ms por quadro.
+
+        Só o trecho pedido: a música inteira nessa resolução leva segundos.
+        """
+        a = max(0, int((t0 - 0.5) * SR))
+        b = min(len(self.f.audio), int((t1 + 0.5) * SR))
+        if (a, b) not in self._ataques:
+            env, seg = envelope_ataques(self.f.stems["drums"][a:b].mean(axis=1), SR, hop=64)
+            self._ataques[(a, b)] = (a / SR + np.arange(len(env)) * seg, env)
+        return self._ataques[(a, b)]
 
     def impressoes(self, nome: str) -> np.ndarray:
+        """Impressão de cada compasso da fonte, guardada em disco (leva 1 a 2 s para calcular)."""
         if nome not in self._impressoes:
-            self._impressoes[nome] = cp.impressoes(self[nome].mean(axis=1), self.f.grade, SR)
+            arq = self._arquivo_impressoes(nome)
+            imp = None
+            if arq is not None and arq.exists():
+                try:
+                    imp = np.load(arq)
+                except (OSError, ValueError):
+                    imp = None
+                if imp is not None and len(imp) != len(self.f.grade.compassos):
+                    imp = None
+            if imp is None:
+                imp = cp.impressoes(self[nome].mean(axis=1), self.f.grade, SR)
+                if arq is not None:
+                    arq.parent.mkdir(parents=True, exist_ok=True)
+                    np.save(arq, imp)
+            self._impressoes[nome] = imp
         return self._impressoes[nome]
+
+    def _arquivo_impressoes(self, nome: str):
+        import hashlib
+
+        from .config import pasta_cache
+        from .stems import chave_arquivo
+
+        try:
+            chave = chave_arquivo(self.f.caminho)
+        except OSError:
+            return None
+        grade = hashlib.sha1(np.asarray(self.f.grade.compassos, dtype=np.float64).tobytes()).hexdigest()[:10]
+        return pasta_cache() / "compassos" / f"{chave}-{grade}-{nome}.npy"
 
 
 # ---------------------------------------------------------------- escolha do loop
@@ -225,16 +258,24 @@ def _colar(pedacos: list[tuple[str, float, float]], fontes: Fontes) -> tuple[np.
 
 
 def _limitar(x: np.ndarray, teto: float = 0.97) -> np.ndarray:
-    """Segura picos acima do teto (só onde soma de camadas ou o MP3 original estoura)."""
+    """Segura picos acima do teto (só onde soma de camadas ou o MP3 original estoura).
+
+    O ganho só é calculado em volta de cada pico; o resto da música passa intacto.
+    """
     from scipy.ndimage import minimum_filter1d, uniform_filter1d
 
-    pico = np.abs(x).max(axis=1)
-    if pico.max() <= teto:
+    pico = np.maximum(np.abs(x[:, 0]), np.abs(x[:, 1]))
+    acima = np.flatnonzero(pico > teto)
+    if len(acima) == 0:
         return x
-    ganho = np.minimum(1.0, teto / np.maximum(pico, 1e-9))
     w = int(0.005 * SR)
-    g = minimum_filter1d(ganho, size=2 * w + 1)
-    g = uniform_filter1d(g, size=w)
+    g = np.ones(len(x), dtype=np.float32)
+    quebras = np.flatnonzero(np.diff(acima) > 4 * w)
+    for a, b in zip(np.r_[acima[0], acima[quebras + 1]], np.r_[acima[quebras], acima[-1]], strict=True):
+        a0, b0 = max(0, a - 2 * w), min(len(x), b + 2 * w + 1)
+        local = np.minimum(1.0, teto / np.maximum(pico[a0:b0], 1e-9))
+        local = uniform_filter1d(minimum_filter1d(local, size=2 * w + 1), size=w)
+        g[a0:b0] = np.minimum(g[a0:b0], local)
     return np.clip(x * g[:, None], -1, 1).astype(np.float32)
 
 
@@ -249,7 +290,7 @@ def ajuste_local(faixa: Faixa, fontes: Fontes, inicio: int, tamanho: int) -> flo
     pb = g.batidas_por_compasso
     k0, k1 = max(0, inicio - 1), min(len(g.compassos), inicio + tamanho + 1)
     tempos = np.concatenate([g.compassos[k] + g.periodo * np.arange(pb) for k in range(k0, k1)])
-    tempos_env, env = fontes.ataques()
+    tempos_env, env = fontes.ataques(float(tempos.min()), float(tempos.max()))
     d, forca = fase_por_ataques(tempos, tempos_env, env, faixa.duracao, 0.015)
     return d if forca > 0.05 else 0.0
 
@@ -334,6 +375,28 @@ def montar(faixa: Faixa, fontes: Fontes, intro: Escolha | None, outro: Escolha |
     out[-fim:] *= np.linspace(1, 0, fim, dtype=np.float32)[:, None]
     out = _limitar(out)
 
+    # início de cada compasso no extended e o que toca nele, para desenhar a grade na tela
+    compassos_s: list[float] = []
+    camadas_s: list[str] = []
+
+    def loop_na_grade(e: Escolha, t: float) -> None:
+        for j in range(e.compassos):
+            k = e.inicio + j % e.tamanho
+            compassos_s.append(t)
+            camadas_s.append(e.camadas[j])
+            t += g.fim_compasso(k) - g.compassos[k]
+
+    if intro:
+        loop_na_grade(intro, PRE / SR)
+    t_orig = marcas[i_orig] / SR - ini_orig / SR
+    k_fim = faixa.saida if outro else len(g.compassos)
+    for k in range(k_orig if intro else 0, k_fim):
+        if g.compassos[k] + t_orig >= 0:
+            compassos_s.append(g.compassos[k] + t_orig)
+            camadas_s.append("musica")
+    if outro:
+        loop_na_grade(outro, marcas[i_orig + 1] / SR)
+
     meta = {
         "bpm": round(g.bpm, 3),
         "andamento_variavel": g.variavel,
@@ -345,4 +408,6 @@ def montar(faixa: Faixa, fontes: Fontes, intro: Escolha | None, outro: Escolha |
     }
     if outro:
         meta["inicio_outro_s"] = round(marcas[i_orig + 1] / SR, 3)
+    meta["compassos_s"] = [round(x, 4) for x in compassos_s]
+    meta["camadas_s"] = camadas_s
     return out, meta

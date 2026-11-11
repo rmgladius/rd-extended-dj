@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Extended DJ</title>
+<link rel="stylesheet" href="/ui/estilo.css">
+<script>window.EXTDJ_TOKEN = "__TOKEN__";</script>
+<script type="module" src="/ui/app.js"></script>
+</head>
+<body>
+<header class="topo">
+  <div class="marca">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="12" width="3" height="8" rx="1.5"/><rect x="9" y="7" width="3" height="18" rx="1.5"/><rect x="15" y="3" width="3" height="26" rx="1.5"/><rect x="21" y="9" width="3" height="14" rx="1.5"/><rect x="27" y="13" width="3" height="6" rx="1.5"/></svg>
+    <span>Extended DJ</span>
+  </div>
+  <div class="topo-info">
+    <span id="dispositivo"></span>
+    <span class="sep"></span>
+    <span id="cache"></span>
+    <button id="btn-limpar" class="link">limpar</button>
+  </div>
+</header>
+
+<div class="corpo">
+  <aside class="lateral">
+    <div class="lateral-cab">
+      <h2>Músicas</h2>
+      <button id="btn-adicionar" class="btn">+ Adicionar</button>
+    </div>
+    <ul id="lista" class="lista"></ul>
+    <p class="lateral-rodape">Arraste músicas ou pastas para a janela</p>
+  </aside>
+
+  <main id="principal">
+    <section id="vazio" class="vazio">
+      <div class="soltar-aqui">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6v24m0 0-9-9m9 9 9-9M8 34v4a4 4 0 0 0 4 4h24a4 4 0 0 0 4-4v-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h1>Arraste suas músicas para cá</h1>
+        <p>O programa acha o BPM, o tom e o estilo, e monta um intro e um outro em loop para mixar.</p>
+        <button id="btn-escolher" class="btn primario">Escolher músicas</button>
+        <small>MP3, FLAC, WAV, AIFF, M4A, OGG</small>
+      </div>
+    </section>
+
+    <section id="editor" class="editor" hidden>
+      <div class="cab-musica">
+        <div class="cab-titulo">
+          <h1 id="m-titulo"></h1>
+          <p id="m-artista"></p>
+        </div>
+        <div id="m-chips" class="chips"></div>
+      </div>
+
+      <div id="m-espera" class="espera" hidden>
+        <div class="espera-etapa" id="m-etapa"></div>
+        <div class="barra-progresso"><span id="m-progresso"></span></div>
+        <p class="espera-dica">Na primeira vez a música é separada em bateria, baixo, voz e o resto. Depois fica guardado e abre na hora.</p>
+      </div>
+
+      <div id="m-erro" class="erro-painel" hidden></div>
+
+      <div id="m-conteudo">
+        <section class="painel">
+          <div class="painel-cab">
+            <h3>Original</h3>
+            <div class="legenda">
+              <span><i class="cor intro"></i>loop do intro</span>
+              <span><i class="cor outro"></i>loop do outro</span>
+              <span><i class="cor voz"></i>voz</span>
+            </div>
+            <div class="player">
+              <button class="tocar" data-player="original" title="Tocar (espaço)"><svg viewBox="0 0 24 24"><path class="ic-play" d="M7 5v14l12-7z"/><path class="ic-pause" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+              <span class="tempo" id="t-original">0:00</span>
+            </div>
+          </div>
+          <canvas id="onda-original" class="onda" title="Arraste os quadros coloridos para trocar o trecho do loop. Clique para ouvir daquele ponto. Roda do mouse: zoom. Duplo clique: música inteira."></canvas>
+          <p class="dica">Arraste os quadros coloridos para trocar o trecho de cada loop · clique para ouvir · roda do mouse dá zoom</p>
+        </section>
+
+        <div class="lados">
+          <section class="lado" data-lado="intro">
+            <div class="lado-cab">
+              <h3><i class="cor intro"></i>Intro</h3>
+              <span class="resultado"></span>
+            </div>
+            <div class="linha">
+              <label>Tamanho</label>
+              <div class="seg" data-campo="compassos">
+                <button data-v="0">Sem</button><button data-v="8">8</button><button data-v="16">16</button><button data-v="32">32</button><button data-v="64">64</button>
+              </div>
+              <span class="unid">compassos</span>
+            </div>
+            <div class="linha">
+              <label>Loop de</label>
+              <div class="seg" data-campo="loop">
+                <button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button><button data-v="16">16</button>
+              </div>
+              <span class="unid">compassos</span>
+            </div>
+            <div class="linha">
+              <label>O que toca</label>
+              <select data-campo="modo"></select>
+            </div>
+            <div class="trecho"></div>
+            <div class="plano"></div>
+          </section>
+
+          <section class="lado" data-lado="outro">
+            <div class="lado-cab">
+              <h3><i class="cor outro"></i>Outro</h3>
+              <span class="resultado"></span>
+            </div>
+            <div class="linha">
+              <label>Tamanho</label>
+              <div class="seg" data-campo="compassos">
+                <button data-v="0">Sem</button><button data-v="8">8</button><button data-v="16">16</button><button data-v="32">32</button><button data-v="64">64</button>
+              </div>
+              <span class="unid">compassos</span>
+            </div>
+            <div class="linha">
+              <label>Loop de</label>
+              <div class="seg" data-campo="loop">
+                <button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button><button data-v="16">16</button>
+              </div>
+              <span class="unid">compassos</span>
+            </div>
+            <div class="linha">
+              <label>O que toca</label>
+              <select data-campo="modo"></select>
+            </div>
+            <div class="trecho"></div>
+            <div class="plano"></div>
+          </section>
+        </div>
+
+        <section class="painel">
+          <div class="painel-cab">
+            <h3>Extended</h3>
+            <span id="x-duracao" class="sub"></span>
+            <div class="legenda camadas">
+              <span><i class="cor c-batida"></i>bateria</span>
+              <span><i class="cor c-batida_baixo"></i>bateria e baixo</span>
+              <span><i class="cor c-instrumental"></i>instrumental</span>
+              <span><i class="cor c-completo"></i>completa</span>
+              <span><i class="cor c-musica"></i>original</span>
+            </div>
+            <div class="player">
+              <button class="btn pequeno" id="ir-entrada" title="Ouvir a passagem do intro para a música">Ouvir entrada</button>
+              <button class="btn pequeno" id="ir-saida" title="Ouvir a passagem da música para o outro">Ouvir saída</button>
+              <button class="tocar" data-player="extended" title="Tocar (espaço)"><svg viewBox="0 0 24 24"><path class="ic-play" d="M7 5v14l12-7z"/><path class="ic-pause" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+              <span class="tempo" id="t-extended">0:00</span>
+            </div>
+          </div>
+          <div class="onda-caixa">
+            <canvas id="onda-extended" class="onda"></canvas>
+            <div id="x-carregando" class="carregando" hidden><span class="giro"></span>Montando a prévia</div>
+            <div id="x-erro" class="carregando erro" hidden></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="barra">
+  <div class="campo">
+    <label for="formato">Formato</label>
+    <select id="formato">
+      <option value="wav">WAV</option>
+      <option value="aiff">AIFF</option>
+      <option value="flac">FLAC</option>
+      <option value="mp3">MP3 320</option>
+    </select>
+  </div>
+  <div class="campo pasta">
+    <label>Salvar em</label>
+    <button id="pasta" class="pasta-btn" title="Trocar a pasta"></button>
+  </div>
+  <div id="status" class="status"></div>
+  <button id="btn-todas" class="btn">Gerar todas</button>
+  <button id="btn-gerar" class="btn primario">Gerar extended</button>
+</footer>
+
+<input type="file" id="arquivo" multiple accept=".mp3,.flac,.wav,.aif,.aiff,.m4a,.aac,.ogg,.opus,.wma,audio/*" hidden>
+<div id="soltar" class="soltar" hidden><div>Solte para adicionar</div></div>
+<div id="aviso" class="aviso" hidden></div>
+</body>
+</html>

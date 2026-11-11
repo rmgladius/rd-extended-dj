@@ -6,3 +6,6 @@ cache/
 modelos/
 *.egg-info/
 .pytest_cache/
+
+build/
+dist/

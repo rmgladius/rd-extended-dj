@@ -31,7 +31,27 @@ processador (mais lento na separação). No Mac com chip M, usa a GPU do Mac.
 Na primeira execução são baixados três modelos: Demucs (80 MB), beat_this e
 Discogs-EffNet (18 MB, de um servidor lento: pode levar alguns minutos).
 
-## Uso
+## Programa com janela
+
+No Windows, o `Extended DJ.exe` (veja [Gerar o .exe](#gerar-o-exe)) abre direto. O caminho é:
+
+1. arraste as músicas (ou uma pasta) para a janela, ou clique em **Adicionar**;
+2. cada música é analisada na hora: BPM, tom em Camelot, estilo, batida e onde a voz entra;
+3. ajuste o intro e o outro: tamanho, loop de quantos compassos e o que toca (camadas,
+   música completa, instrumental, só bateria, bateria e baixo);
+4. arraste os quadros coloridos na onda da original para escolher de onde sai cada loop;
+5. ouça a prévia do extended (os botões **Ouvir entrada** e **Ouvir saída** pulam para as emendas);
+6. **Gerar extended** grava na pasta escolhida, em WAV, AIFF, FLAC ou MP3 320.
+   **Gerar todas** faz a lista inteira, cada uma com os próprios ajustes.
+
+Fora do .exe, a mesma tela abre com `uv run extdj-app`. No WSL não há janela: use
+`./extdj-app`, que abre no navegador do Windows.
+
+Os instrumentos separados ficam guardados (uns 140 MB por música), para a música abrir
+na hora da segunda vez. Acima de 15 GB os mais antigos saem sozinhos; o **limpar** no topo
+da janela apaga os das músicas que não estão abertas.
+
+## Linha de comando
 
 ```bash
 # planilha com BPM, tom, estilo, batida e onde a voz entra
@@ -93,6 +113,30 @@ um fica um `.extdj.json` com BPM, posição do primeiro tempo e onde cada parte 
   cue points do Traktor e do Serato no arquivo original não são copiados, porque
   estariam errados no extended.
 
+## Gerar o .exe
+
+Roda no Windows (o PyInstaller não gera .exe a partir do Linux):
+
+1. coloque um ffmpeg "shared" em `build\ffmpeg` (`ffmpeg.exe`, `ffprobe.exe` e as DLLs `av*` e `sw*`),
+   por exemplo de [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) ou do
+   [BtbN](https://github.com/BtbN/FFmpeg-Builds/releases);
+2. rode `empacotar\construir.bat`. Ele instala o ambiente em `build\venv-win`, junta os modelos
+   em `build\modelos` (ou use `empacotar/juntar_modelos.py` num ambiente que já os tenha
+   baixado) e chama o PyInstaller.
+
+Sai em `build\dist\Extended DJ\`: a pasta inteira é o programa (o .exe precisa das pastas ao
+lado). Com o PyTorch com CUDA dentro, ela tem uns 5 GB e funciona em qualquer Windows 10 ou
+11 de 64 bits; com placa NVIDIA usa a placa, sem ela usa o processador (a separação de uma
+música de 3 minutos leva perto de 80 s em vez de 8 s).
+
+Para conferir um pacote sem abrir a janela:
+
+```bat
+"Extended DJ.exe" --teste musica.mp3 --saida-teste C:\pasta
+```
+
+O resultado vai para `%LOCALAPPDATA%\extdj\cache\extdj.log`.
+
 ## Testes
 
 ```bash
@@ -104,3 +148,5 @@ uv run pytest
 - beat_this, CPJKU (MIT)
 - Demucs, Alexandre Défossez / Meta (MIT)
 - Discogs-EffNet, MTG / Universitat Pompeu Fabra (CC BY-NC-SA 4.0, uso sem fins comerciais)
+- pywebview (BSD) e WebView2 da Microsoft, para a janela
+- FFmpeg (LGPL ou GPL, conforme o build usado no .exe)

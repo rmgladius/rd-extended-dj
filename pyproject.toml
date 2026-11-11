@@ -16,13 +16,17 @@ dependencies = [
     "beat-this>=1.1.0",
     "onnxruntime>=1.18",
     "tqdm>=4.66",
+    "pywebview>=5.4",
 ]
 
 [project.scripts]
 extdj = "extdj.cli:main"
+extdj-app = "extdj.app.janela:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]
+# só para gerar o .exe (rodar no Windows): uv sync --group empacotar
+empacotar = ["pyinstaller>=6.11", "pillow>=10"]
 
 [build-system]
 requires = ["hatchling"]
