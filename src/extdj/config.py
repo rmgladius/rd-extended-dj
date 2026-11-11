@@ -10,7 +10,7 @@ from pathlib import Path
 SR = 44100
 
 # Sobe quando o formato da análise muda, para não reaproveitar cache velho.
-VERSAO_ANALISE = 2
+VERSAO_ANALISE = 3
 
 # Programa empacotado (PyInstaller): modelos e ffmpeg vêm junto, dentro de _internal.
 CONGELADO = bool(getattr(sys, "frozen", False))

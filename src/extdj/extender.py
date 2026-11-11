@@ -67,6 +67,8 @@ class Fontes:
                 x = st["drums"]
             elif nome == "batida_baixo":
                 x = st["drums"] + st["bass"]
+            elif nome == "sem_batida":
+                x = st["vocals"] + st["other"]
             else:
                 raise KeyError(nome)
             self._cache[nome] = x
@@ -356,11 +358,12 @@ def montar(faixa: Faixa, fontes: Fontes, intro: Escolha | None, outro: Escolha |
             peca[-XF:] *= np.linspace(1, 0, XF, dtype=np.float32)[:, None]
             out[o:o + n] += peca
 
-    # rabo da música (fade, reverb) por cima do começo do outro
+    # rabo da música (fade, reverb) por cima do começo do outro, sem bateria e baixo:
+    # quem segura a batida ali é o loop, e a pancada final dobraria por cima dele
     if outro and fim_orig < n_total:
         compasso = g.periodo * g.batidas_por_compasso * SR
         o_fim = marcas[i_orig + 1] - PRE
-        rabo = _trecho(fontes["completo"], int(round(fim_orig)) - PRE, n_total - int(round(fim_orig)) + PRE)
+        rabo = _trecho(fontes["sem_batida"], int(round(fim_orig)) - PRE, n_total - int(round(fim_orig)) + PRE)
         rabo = rabo[:int(4 * compasso)]
         env = np.ones(len(rabo), dtype=np.float32)
         env[:XF] = np.linspace(0, 1, XF)

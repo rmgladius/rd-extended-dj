@@ -101,6 +101,41 @@ def test_hip_hop_nao_vira_180():
     assert abs(g.bpm - 90) < 0.05
 
 
+def test_grade_com_trechos_no_contratempo():
+    # funk a 130 BPM: em dois trechos o detector marcou o "e" de cada tempo
+    rng = np.random.default_rng(2)
+    periodo = 60 / 130
+    verdade = 0.02 + periodo * np.arange(240)
+    detectadas = verdade.copy()
+    for a, b in ((130, 150), (200, 222)):
+        detectadas[a:b] += periodo / 2
+    detectadas = np.round((detectadas + rng.normal(0, 0.003, len(detectadas))) / 0.02) * 0.02
+    g = ajustar_grade(detectadas, verdade[::4], verdade[-1] + 1)
+    assert abs(g.bpm - 130) < 0.05
+    assert not g.variavel
+    # o primeiro tempo continua no lugar até o fim da música
+    c = np.asarray(g.compassos)
+    k = np.round((c - 0.02) / periodo)
+    assert np.abs(c - (0.02 + periodo * k)).max() < 0.006
+    assert np.all(k % 4 == 0)
+
+
+def test_saida_no_ultimo_compasso_com_batida_ate_o_fim():
+    from extdj import compassos as cp
+    from extdj.analise import _limites_musica
+
+    f = _faixa_cliques(compassos=20)
+    g = f.grade
+    bat = f.audio[:, 0].copy()
+    # a música acaba numa pancada no primeiro tempo do compasso 18
+    corte = int((g.compassos[18] + 0.1) * SR)
+    bat[corte:] = 0
+    validos = cp.completos(g, SR, len(bat))
+    rms = cp.rms_db(bat, g, SR)
+    _, saida, _ = _limites_musica(g, bat, bat, rms, rms, validos)
+    assert saida == 18
+
+
 def test_camadas_comecam_na_bateria():
     from extdj.extender import _camadas
 

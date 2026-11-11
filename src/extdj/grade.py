@@ -127,6 +127,118 @@ def periodo_da_grade(intervalos: np.ndarray, teto_bpm: float = MAIOR_BPM_PREFERI
     return rapido if 60.0 / rapido <= teto_bpm else lento
 
 
+def _contar_seguido(b: np.ndarray, p: float) -> tuple[np.ndarray, np.ndarray]:
+    """Conta arredondando o intervalo até a última batida aceita.
+
+    Batida a menos de 3/4 de tempo da anterior (meio-tempo detectado em andamento
+    cheio, ou ataque falso) fica de fora.
+    """
+    idx = np.zeros(len(b), dtype=int)
+    ok = np.zeros(len(b), dtype=bool)
+    ok[0] = True
+    ult = 0
+    for i in range(1, len(b)):
+        r = (b[i] - b[ult]) / p
+        if r < 0.75:
+            continue
+        idx[i] = idx[ult] + int(round(r))
+        ok[i] = True
+        ult = i
+    return idx, ok
+
+
+def _contar_sem_contratempo_a_partir(b: np.ndarray, p: float, inicio: int) -> tuple[np.ndarray, np.ndarray]:
+    idx = np.zeros(len(b), dtype=int)
+    ok = np.zeros(len(b), dtype=bool)
+    ok[inicio] = True
+    ancoras = [inicio]
+    for i in range(inicio + 1, len(b)):
+        ult = ancoras[-1]
+        pl = p
+        if len(ancoras) > 8:
+            # período local pelas últimas 16 batidas aceitas: acompanha andamento ao vivo
+            ant = ancoras[max(0, len(ancoras) - 17)]
+            pl = (b[ult] - b[ant]) / (idx[ult] - idx[ant])
+        r = (b[i] - b[ult]) / pl
+        k = int(round(r))
+        if k < 1 or abs(r - k) > 0.25:
+            continue
+        idx[i] = idx[ult] + k
+        ok[i] = True
+        ancoras.append(i)
+    return idx, ok
+
+
+def _contar_sem_contratempo(b: np.ndarray, p: float) -> tuple[np.ndarray, np.ndarray]:
+    """Conta deixando de fora a batida a mais de um quarto de tempo da contagem.
+
+    O detector às vezes passa a marcar o contratempo por um trecho (no funk o
+    tamborzão bate forte no "e" de cada tempo). Na contagem seguida, a virada para o
+    contratempo e a volta arredondam 1,5 tempo para 2, e cada trecho assim soma uma
+    batida que não existe. Aqui esse trecho fica de fora; se a maioria cair no
+    contratempo do começo, vale a fase da maioria.
+    """
+    idx, ok = _contar_sem_contratempo_a_partir(b, p, 0)
+    fora = np.flatnonzero(~ok)
+    if len(fora) and ok.sum() < len(b) / 2:
+        idx2, ok2 = _contar_sem_contratempo_a_partir(b, p, int(fora[0]))
+        if ok2.sum() > ok.sum():
+            idx, ok = idx2, ok2
+    return idx, ok
+
+
+@dataclass
+class _Reta:
+    b: np.ndarray          # batidas aceitas
+    idx: np.ndarray        # número de cada uma na grade
+    t0: float
+    periodo: float
+    lento: np.ndarray      # oscilação lenta do andamento em volta da reta
+    validas: np.ndarray    # batidas que não são erro de detecção
+    deriva_ms: float
+
+
+def _reta(b: np.ndarray, idx: np.ndarray, ok: np.ndarray) -> _Reta:
+    b, idx = b[ok], idx[ok]
+
+    # 1) reta inicial e separação entre oscilação lenta (andamento) e erro de detecção
+    t0, periodo = np.polyfit(idx, b, 1)[::-1]
+    res = b - (t0 + periodo * idx)
+    lento = _mediana_movel(res, 4)
+    validas = np.abs(res - lento) < 0.035
+    if validas.sum() < 16:
+        validas[:] = True
+
+    # 2) reta final só com as batidas confiáveis
+    t0, periodo = np.polyfit(idx[validas], b[validas], 1)[::-1]
+    res = b - (t0 + periodo * idx)
+    lento = _media_movel(res, validas.astype(float), 8)
+    deriva_ms = float(np.percentile(np.abs(lento[validas]), 95) * 1000)
+    return _Reta(b, idx, float(t0), float(periodo), lento, validas, deriva_ms)
+
+
+def numerar_batidas(batidas: np.ndarray, p: float) -> _Reta:
+    """Numera as batidas na grade e passa uma reta (andamento) por elas.
+
+    Há duas contagens: a seguida, que aguenta trechos fora da grade (uma quebra com
+    andamento livre no meio de um bootleg), e a que ignora o contratempo. Fica a que
+    explica as batidas com o andamento mais estável: uma batida contada a mais vira um
+    degrau na oscilação e aparece na deriva.
+    """
+    b = np.asarray(batidas, dtype=float)
+    melhor = None
+    for contar in (_contar_seguido, _contar_sem_contratempo):
+        idx, ok = contar(b, p)
+        if ok.sum() < 16:
+            continue
+        r = _reta(b, idx, ok)
+        if melhor is None or r.deriva_ms < melhor.deriva_ms - 0.5:
+            melhor = r
+    if melhor is None:
+        raise RuntimeError("Não achei batidas suficientes para montar a grade.")
+    return melhor
+
+
 def ajustar_grade(
     batidas: np.ndarray,
     primeiros: np.ndarray,
@@ -142,33 +254,9 @@ def ajustar_grade(
     if len(b) < 16:
         raise RuntimeError("Não achei batidas suficientes para montar a grade.")
 
-    p_grade = periodo_da_grade(np.diff(b))
-    # numera as batidas na grade; batida entre dois tempos (meio-tempo detectado em
-    # andamento cheio, ou ataque falso) fica de fora
-    aceitas = [0]
-    idx_lista = [0]
-    for i in range(1, len(b)):
-        r = (b[i] - b[aceitas[-1]]) / p_grade
-        if r < 0.75:
-            continue
-        aceitas.append(i)
-        idx_lista.append(idx_lista[-1] + int(round(r)))
-    b = b[aceitas]
-    idx = np.asarray(idx_lista)
-
-    # 1) reta inicial e separação entre oscilação lenta (andamento) e erro de detecção
-    t0, periodo = np.polyfit(idx, b, 1)[::-1]
-    res = b - (t0 + periodo * idx)
-    lento = _mediana_movel(res, 4)
-    validas = np.abs(res - lento) < 0.035
-    if validas.sum() < 16:
-        validas[:] = True
-
-    # 2) reta final só com as batidas confiáveis
-    t0, periodo = np.polyfit(idx[validas], b[validas], 1)[::-1]
-    res = b - (t0 + periodo * idx)
-    lento = _media_movel(res, validas.astype(float), 8)
-    deriva_ms = float(np.percentile(np.abs(lento[validas]), 95) * 1000)
+    reta = numerar_batidas(b, periodo_da_grade(np.diff(b)))
+    b, idx, t0, periodo = reta.b, reta.idx, reta.t0, reta.periodo
+    lento, validas, deriva_ms = reta.lento, reta.validas, reta.deriva_ms
 
     # andamento local em janelas de 16 batidas
     posicoes = t0 + periodo * idx + lento

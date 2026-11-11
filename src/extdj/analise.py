@@ -46,8 +46,16 @@ def _primeiro_som(mono: np.ndarray) -> float:
     return float(acima[0] * 512 / SR) if len(acima) else 0.0
 
 
-def _limites_musica(grade: Grade, mono: np.ndarray, rms_mix: np.ndarray, rms_bat: np.ndarray,
-                    validos: np.ndarray) -> tuple[int, int, float]:
+def _ultimo_tempo_db(bateria: np.ndarray, grade: Grade, k: int) -> float:
+    """Volume da bateria no último tempo do compasso k (dB)."""
+    fim = grade.fim_compasso(k)
+    a, b = int(max(0.0, fim - grade.periodo) * SR), int(fim * SR)
+    trecho = bateria[a:b].astype(np.float64)
+    return float(10 * np.log10(np.mean(trecho ** 2) + 1e-12)) if len(trecho) else -120.0
+
+
+def _limites_musica(grade: Grade, mono: np.ndarray, bateria: np.ndarray, rms_mix: np.ndarray,
+                    rms_bat: np.ndarray, validos: np.ndarray) -> tuple[int, int, float]:
     """(compasso de entrada, compasso de saída, instante do primeiro som)."""
     a = _primeiro_som(mono)
     inicios = grade.inicios
@@ -63,7 +71,14 @@ def _limites_musica(grade: Grade, mono: np.ndarray, rms_mix: np.ndarray, rms_bat
     fortes = fortes[fortes > entrada]
     if len(fortes) == 0:
         return entrada, len(inicios), a
-    return entrada, int(fortes[-1] + 1), a
+    saida = int(fortes[-1] + 1)
+    # a batida tem que ir até o fim do último compasso: música que termina numa
+    # pancada no primeiro tempo deixaria um buraco entre o fim dela e o outro
+    for _ in range(2):
+        if saida - 1 <= entrada + 1 or _ultimo_tempo_db(bateria, grade, saida - 1) >= ref_bat - 20:
+            break
+        saida -= 1
+    return entrada, saida, a
 
 
 def _caminho_cache(caminho: Path) -> Path:
@@ -137,7 +152,7 @@ def analisar(caminho: Path, dispositivo: str, usar_cache: bool = True,
         info = {"tom": tonalidade, "estilos": estilos}
 
     validos = cp.completos(grade, SR, len(mix))
-    entrada, saida, primeiro_som = _limites_musica(grade, mix, rms_mix, rms_bat, validos)
+    entrada, saida, primeiro_som = _limites_musica(grade, mix, bateria, rms_mix, rms_bat, validos)
 
     if not salvo:
         com_batida = validos & (rms_bat > np.median(rms_bat[validos]) - 12)

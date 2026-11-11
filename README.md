@@ -97,14 +97,19 @@ um fica um `.extdj.json` com BPM, posição do primeiro tempo e onde cada parte 
   fica no andamento rápido até 155 BPM. O BPM é refinado pelo ataque da bateria
   isolada: se a fase escorrega ao longo da música, o BPM é corrigido (0,01 BPM de erro
   já dá 15 ms no fim de uma faixa de 4 minutos).
+- **Contratempo:** em alguns trechos o detector marca o "e" de cada tempo (acontece
+  no funk, em que o tamborzão bate forte no contratempo). Esses trechos ficam fora da
+  conta, senão cada um somaria uma batida e a grade sairia com o BPM errado e o
+  primeiro tempo fora do lugar.
 - **Andamento variável:** música com baterista ao vivo é detectada. O loop sai do
   trecho vizinho ao intro ou ao outro, no andamento local.
 - **Emendas:** cada loop é recortado em compassos inteiros e encostado no ataque da
   bateria do próprio trecho. A emenda dura 3 ms e termina antes do tempo forte. As
   posições são acumuladas em ponto flutuante, então a grade não escorrega.
 - **Anacruse e rabo:** se a música começa antes do primeiro tempo (uma voz puxando a
-  frase), esse começo toca por cima do fim do intro. O fade e o reverb do final tocam
-  por cima do começo do outro.
+  frase), esse começo toca por cima do fim do intro. A música vai até o último
+  compasso com batida até o fim; o que vem depois (pancada final, fade, reverb) toca
+  por cima do começo do outro sem a bateria e o baixo, que ali vêm do loop.
 - **Tom:** croma sem a bateria, comparado com os perfis de Krumhansl, Temperley e EDMA
   (Faraldo et al., 2016, feito para música eletrônica).
 - **Estilo:** [Discogs-EffNet](https://essentia.upf.edu/models.html), 400 estilos do
