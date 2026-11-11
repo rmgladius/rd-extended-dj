@@ -24,7 +24,6 @@ NOMES_MODO = {
     "batida": "só a bateria",
     "batida_baixo": "bateria e baixo",
     "camadas": "em camadas",
-    "bumbo": "graves da bateria",
 }
 
 PRE = int(0.004 * SR)   # cada emenda acontece 4 ms antes do tempo forte
@@ -48,13 +47,6 @@ class Escolha:
 
 # ---------------------------------------------------------------- fontes de áudio
 
-def _passa_baixa(x: np.ndarray, corte: float) -> np.ndarray:
-    from scipy.signal import butter, sosfiltfilt
-
-    sos = butter(4, corte, btype="low", fs=SR, output="sos")
-    return sosfiltfilt(sos, x, axis=0).astype(np.float32)
-
-
 class Fontes:
     """Sinais que podem virar loop, calculados só quando usados."""
 
@@ -75,8 +67,6 @@ class Fontes:
                 x = st["drums"]
             elif nome == "batida_baixo":
                 x = st["drums"] + st["bass"]
-            elif nome == "bumbo":
-                x = _passa_baixa(st["drums"], 180.0)
             else:
                 raise KeyError(nome)
             self._cache[nome] = x
@@ -144,10 +134,14 @@ def _candidatos(faixa: Faixa, imp: np.ndarray, tamanho: int, lado: str, com_voz:
 
 
 def _camadas(n: int, ultima: str) -> list[str]:
-    """Plano de camadas do intro, compasso a compasso."""
+    """Plano de camadas do intro, compasso a compasso.
+
+    Metade só bateria, um quarto bateria e baixo, o último quarto com a camada que
+    leva para a música. Em 32 compassos: 16 + 8 + 8, virando sempre em frase de 8.
+    """
     if n >= 16:
         q = n // 4
-        return ["bumbo"] * q + ["batida"] * q + ["batida_baixo"] * q + [ultima] * (n - 3 * q)
+        return ["batida"] * (2 * q) + ["batida_baixo"] * q + [ultima] * (n - 3 * q)
     if n >= 8:
         h = n // 2
         return ["batida"] * h + ["batida_baixo"] * (n - h)

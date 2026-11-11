@@ -68,7 +68,7 @@ um fica um `.extdj.json` com BPM, posição do primeiro tempo e onde cada parte 
 | `instrumental` | tudo menos a voz |
 | `batida` | só a bateria |
 | `batida_baixo` | bateria e baixo |
-| `camadas` | intro que vai crescendo: graves da bateria, bateria, bateria e baixo, instrumental. O outro faz o caminho inverso |
+| `camadas` | intro que vai crescendo: bateria na primeira metade, bateria e baixo, depois instrumental (em 32 compassos: 16 + 8 + 8). O outro faz o caminho inverso |
 
 ## Como funciona
 

@@ -99,3 +99,11 @@ def test_hip_hop_nao_vira_180():
     detectadas = np.sort(np.concatenate([lentas, meio]))
     g = ajustar_grade(detectadas, lentas[::4], lentas[-1] + 1)
     assert abs(g.bpm - 90) < 0.05
+
+
+def test_camadas_comecam_na_bateria():
+    from extdj.extender import _camadas
+
+    plano = _camadas(32, "instrumental")
+    assert plano == ["batida"] * 16 + ["batida_baixo"] * 8 + ["instrumental"] * 8
+    assert _camadas(8, "completo") == ["batida"] * 4 + ["batida_baixo"] * 4
