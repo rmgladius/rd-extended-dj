@@ -157,8 +157,16 @@ def main(argv: list[str] | None = None) -> int:
     import webview
 
     srv.em_segundo_plano()
+    # abre maximizada; o tamanho abaixo vale ao restaurar e precisa caber em notebook pequeno
+    largura, altura = 1440, 900
+    try:
+        tela = webview.screens[0]
+        largura, altura = min(largura, tela.width - 60), min(altura, tela.height - 90)
+    except (IndexError, AttributeError):
+        pass
     nativo.janela = webview.create_window(
-        TITULO, srv.endereco, width=1440, height=900, min_size=(1100, 720),
+        TITULO, srv.endereco, width=largura, height=altura,
+        min_size=(min(1100, largura), min(680, altura)),
         background_color="#0f1114", text_select=False, maximized=True,
     )
     webview.start(private_mode=False, storage_path=str(pasta_cache() / "janela"))
