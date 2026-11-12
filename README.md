@@ -40,9 +40,10 @@ No Windows, o `Extended DJ.exe` (veja [Gerar o .exe](#gerar-o-exe)) abre direto.
 3. ajuste o intro e o outro: tamanho, loop de quantos compassos e o que toca (camadas,
    música completa, instrumental, só bateria, bateria e baixo);
 4. arraste os quadros coloridos na onda da original para escolher de onde sai cada loop;
-5. se quiser mixar o loop com a música, arraste a alça **»** do intro ou **«** do outro na
-   onda do extended (ou use os botões « » em **Por cima**) e escolha o **Fader**
-   (veja [Mixagem](#mixagem));
+5. se quiser mixar o loop com a música, clique em **« »** na emenda do intro ou do outro,
+   na onda do extended (ou em **Por cima**, no cartão), e escolha o **Fader**
+   (veja [Mixagem](#mixagem)). **Desfazer** (ou Ctrl+Z) volta a última mudança e
+   **Resetar** volta a música aos ajustes de quando ela foi aberta;
 6. ouça a prévia do extended (os botões **Ouvir entrada** e **Ouvir saída** pulam para as emendas);
 7. **Gerar extended** grava na pasta escolhida, em WAV, AIFF, FLAC ou MP3 320.
    **Gerar todas** faz a lista inteira, cada uma com os próprios ajustes.
@@ -64,6 +65,9 @@ O **Fader** muda o volume do loop aos poucos, como a mão no fader do mixer:
   mixagem: o intro baixa enquanto a música entra e o outro sobe enquanto ela acaba;
 - na onda do extended a rampa é a linha branca. Os dois pontos podem ser arrastados, de
   tempo em tempo na horizontal e de 5 em 5% na vertical. **voltar ao automático** desfaz.
+
+Na onda do extended, o **« N »** na emenda de cada bloco mostra quantos compassos estão
+por cima da música; cada clique anda o bloco um compasso para o lado da seta.
 
 O nível segue a curva de um fader de mixer (no meio do caminho o loop está 12 dB abaixo).
 Música e loop juntos passam do volume máximo, então enquanto tocam juntos o volume da

@@ -72,6 +72,8 @@ h1, h2, h3, p { margin: 0; }
 .btn.primario { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); }
 .btn.primario:hover { background: #4fe0cd; }
 .btn.pequeno { padding: 4px 10px; font-size: 12px; }
+.btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; vertical-align: -2px; margin-right: 5px; }
+.player .divisor { width: 1px; height: 18px; background: var(--borda-forte); margin: 0 2px; }
 .link { background: none; border: 0; padding: 0; color: var(--acento); cursor: pointer; font-size: inherit; }
 .link:hover { text-decoration: underline; }
 
@@ -196,7 +198,7 @@ select {
 .tempo { font-variant-numeric: tabular-nums; color: var(--texto-2); font-size: 12px; min-width: 150px; }
 
 .onda { width: 100%; height: 128px; display: block; border-radius: 6px; touch-action: none; }
-#onda-extended { height: 144px; }
+#onda-extended { height: 148px; }
 .onda-caixa { position: relative; }
 .carregando {
   position: absolute; inset: 0;

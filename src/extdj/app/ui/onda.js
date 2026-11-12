@@ -1,5 +1,5 @@
 // Forma de onda em três faixas, com grade de compassos, zoom, regiões arrastáveis
-// (os loops), blocos do extended com alça e linha de fader, e o cursor de reprodução.
+// (os loops), blocos do extended com botões « » e linha de fader, e o cursor de reprodução.
 
 export const CORES = {
   graves: '#2f6fed',
@@ -13,7 +13,6 @@ export const CORES = {
   cursor: '#ffffff',
 };
 
-const TOPO = 18;    // faixa dos números de compasso
 const FAIXA = 7;    // faixa colorida (camadas ou voz)
 
 function decodificar(b64) {
@@ -29,7 +28,8 @@ export class Onda {
     this.ctx = canvas.getContext('2d');
     this.aoBuscar = opcoes.aoBuscar || (() => {});
     this.aoMoverRegiao = opcoes.aoMoverRegiao || (() => {});
-    this.aoMoverAlca = opcoes.aoMoverAlca || (() => {});
+    this.aoClicarAlca = opcoes.aoClicarAlca || (() => {});
+    this.topo = opcoes.topo ?? 18;   // faixa dos números de compasso (e dos botões « »)
     this.aoMoverFader = opcoes.aoMoverFader || (() => {});
     this.dados = null;
     this.duracao = 0;
@@ -41,7 +41,7 @@ export class Onda {
     this.fundos = [];      // {t0, t1, cor}
     this.marcos = [];      // {t, cor, rotulo}
     this.blocos = [];      // {id, kIni, kFim, cor}: intro e outro no extended
-    this.alcas = [];       // {id, k, kIni, kFim, sentido, min, max, sobre, cor, seta}
+    this.alcas = [];       // {id, k, sentido, sobre, podeMenos, podeMais, cor}: botões « N » na emenda
     this.envelopes = [];   // {id, kIni, kFim, cor, pontos: [{p, nivel}]}: linha do fader
     this.v0 = 0;
     this.v1 = 1;
@@ -177,13 +177,6 @@ export class Onda {
     return k - kIni + Math.min(1, (tc - a) / ((this.tk(k + 1) - a) || 1));
   }
 
-  // compasso mais perto de t, contando o fim do último
-  divisaoMaisPerto(t) {
-    const k = this.compassoMaisPerto(t);
-    const n = this.compassos.length;
-    return Math.abs(this.tk(n) - t) < Math.abs(this.tk(k) - t) ? n : k;
-  }
-
   compassoMaisPerto(t) {
     const k = this.compassoEm(t);
     const c = this.compassos;
@@ -223,21 +216,21 @@ export class Onda {
     g.fillRect(0, 0, this.L, this.A);
     if (!this.pronto) { this._compor(); return; }
 
-    const topoOnda = TOPO + FAIXA + 2;
+    const topoOnda = this.topo + FAIXA + 2;
     const baseOnda = this.A - FAIXA - 2;
     const meio = (topoOnda + baseOnda) / 2;
     const meiaAltura = (baseOnda - topoOnda) / 2;
 
     for (const f of this.fundos) {
       g.fillStyle = f.cor;
-      g.fillRect(this.x(f.t0), TOPO, this.x(f.t1) - this.x(f.t0), this.A - TOPO);
+      g.fillRect(this.x(f.t0), this.topo, this.x(f.t1) - this.x(f.t0), this.A - this.topo);
     }
 
     this._grade(g, topoOnda, baseOnda);
     this._onda(g, meio, meiaAltura);
 
     for (const f of this.faixas) {
-      const y = f.onde === 'base' ? this.A - FAIXA : TOPO;
+      const y = f.onde === 'base' ? this.A - FAIXA : this.topo;
       g.globalAlpha = f.alfa ?? 1;
       g.fillStyle = f.cor;
       const xa = this.x(f.t0);
@@ -250,26 +243,14 @@ export class Onda {
       if (x < -60 || x > this.L + 2) continue;
       g.strokeStyle = m.cor;
       g.lineWidth = 2;
-      g.beginPath(); g.moveTo(x, TOPO); g.lineTo(x, this.A); g.stroke();
-      if (m.rotulo) this._etiqueta(g, x + 1, TOPO + FAIXA + 3, m.rotulo, m.cor);
+      g.beginPath(); g.moveTo(x, this.topo); g.lineTo(x, this.A); g.stroke();
     }
 
     for (const r of this.regioes) this._regiao(g, r, topoOnda, baseOnda);
     for (const b of this.blocos) this._bloco(g, b, topoOnda, baseOnda, 0);
-    const a = this.arrasto;
-    if (a?.alca && a.kNovo !== a.alca.k) {
-      // para onde o bloco vai ao soltar
-      const d = a.kNovo - a.alca.k;
-      const b = this.blocos.find((x) => x.id === a.alca.id);
-      if (b) this._bloco(g, b, topoOnda, baseOnda, d, true);
-      const sobre = a.alca.sobre + a.alca.sentido * d;
-      const xm = this.x(this.tk(a.kNovo));
-      g.font = '700 10px "Segoe UI", system-ui, sans-serif';
-      const texto = sobre ? `${sobre} ${sobre === 1 ? 'compasso' : 'compassos'} por cima da música` : 'fora da música';
-      this._etiqueta(g, a.alca.sentido > 0 ? xm + 12 : Math.max(0, xm - 12 - g.measureText(texto).width - 14), topoOnda + 4, texto, a.alca.cor, true);
-    }
     for (const e of this.envelopes) this._envelope(g, e, topoOnda, baseOnda);
-    for (const al of this.alcas) this._alca(g, al, topoOnda, baseOnda);
+    this._rotulosMarcos(g, topoOnda, baseOnda);
+    for (const al of this.alcas) this._alca(g, al);
 
     if (this.v1 - this.v0 < this.duracao - 0.01) {
       // indicador de onde a vista está na música inteira
@@ -354,7 +335,7 @@ export class Onda {
       }
       if (rot !== '' && Number.isFinite(numero) && (numero - 1) % passoRotulo === 0) {
         g.fillStyle = CORES.rotulo;
-        g.fillText(String(rot), x + 3, TOPO / 2 + 1);
+        g.fillText(String(rot), x + 3, this.topo / 2 + 1);
       }
     }
   }
@@ -379,6 +360,22 @@ export class Onda {
     r._xb = xb;
   }
 
+  // etiqueta de cada marca no alto da onda; se um ponto do fader cair em cima dela,
+  // desce para o pé ou para o meio, para o ponto e o texto ficarem à vista
+  _rotulosMarcos(g, topo, base) {
+    const pontos = this.envelopes.flatMap((e) => e._pts || []);
+    g.font = '700 10px "Segoe UI", system-ui, sans-serif';
+    for (const m of this.marcos) {
+      if (!m.rotulo) continue;
+      const x = Math.round(this.x(m.t)) + 1.5;
+      if (x < -60 || x > this.L + 2) continue;
+      const w = g.measureText(m.rotulo).width + 10;
+      const livre = (y) => !pontos.some((q) => q.x > x - 9 && q.x < x + w + 9 && q.y > y - 9 && q.y < y + 15 + 9);
+      const y = [topo + 1, base - 16, (topo + base) / 2 - 8].find(livre) ?? topo + 1;
+      this._etiqueta(g, x, y, m.rotulo, m.cor);
+    }
+  }
+
   _bloco(g, b, topo, base, desloc, fantasma) {
     const xa = this.x(this.tk(b.kIni + desloc));
     const xb = this.x(this.tk(b.kFim + desloc));
@@ -396,25 +393,41 @@ export class Onda {
     g.restore();
   }
 
-  _alca(g, a, topo, base) {
-    const x = this.x(this.tk(a.k));
-    a._x = x;
-    a._y = (topo + base) / 2;
-    if (x < -12 || x > this.L + 12) return;
-    const w = 18;
-    const h = 34;
-    const arrastando = this.arrasto?.alca === a;
+  _alca(g, a) {
+    // « N » centrado na emenda do bloco com a música, na faixa dos números de compasso
+    const xe = this.x(this.tk(a.k));
+    a._botoes = [];
+    if (xe < -40 || xe > this.L + 40) return;
+    const lado = 18;
+    const meio = 24;
+    const h = Math.min(18, this.topo - 2);
+    const w = 2 * lado + meio;
+    const x0 = Math.max(1, Math.min(this.L - w - 1, xe - w / 2));
+    const y0 = 1;
     g.save();
-    g.globalAlpha = arrastando ? 0.45 : 1;
+    g.fillStyle = 'rgba(10,12,15,0.92)';
+    g.beginPath(); g.roundRect(x0 - 1, y0 - 1, w + 2, h + 2, 5); g.fill();
     g.fillStyle = a.cor;
-    g.beginPath();
-    g.roundRect(x - w / 2, a._y - h / 2, w, h, 5);
-    g.fill();
-    g.fillStyle = '#0b0d10';
-    g.font = '800 15px "Segoe UI", system-ui, sans-serif';
+    g.beginPath(); g.roundRect(x0, y0, w, h, 4); g.fill();
+    g.fillStyle = 'rgba(11,13,16,0.85)';
+    g.fillRect(x0 + lado, y0 + 2, meio, h - 4);
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(a.seta, x, a._y);
+    g.font = '700 11px "Segoe UI", system-ui, sans-serif';
+    g.fillStyle = a.cor;
+    g.fillText(String(a.sobre), x0 + lado + meio / 2, y0 + h / 2 + 0.5);
+    // « anda o bloco para a esquerda, » para a direita; no intro » entra na música, no outro «
+    const esq = a.sentido > 0 ? -1 : 1;
+    const botoes = [
+      { x0, x1: x0 + lado, seta: '«', mais: esq, ativo: esq > 0 ? a.podeMais : a.podeMenos },
+      { x0: x0 + lado + meio, x1: x0 + w, seta: '»', mais: -esq, ativo: -esq > 0 ? a.podeMais : a.podeMenos },
+    ];
+    g.font = '800 14px "Segoe UI", system-ui, sans-serif';
+    for (const b of botoes) {
+      g.fillStyle = b.ativo ? '#0b0d10' : 'rgba(11,13,16,0.3)';
+      g.fillText(b.seta, (b.x0 + b.x1) / 2, y0 + h / 2);
+      a._botoes.push({ ...b, y0, y1: y0 + h });
+    }
     g.restore();
   }
 
@@ -477,12 +490,12 @@ export class Onda {
     const x = Math.round(this.x(this.tempo)) + 0.5;
     if (x < 0 || x > this.L) return;
     g.fillStyle = 'rgba(0,0,0,0.35)';
-    g.fillRect(x - 2, TOPO, 4, this.A - TOPO);
+    g.fillRect(x - 2, this.topo, 4, this.A - this.topo);
     g.strokeStyle = CORES.cursor;
     g.lineWidth = 1.5;
-    g.beginPath(); g.moveTo(x, TOPO); g.lineTo(x, this.A); g.stroke();
+    g.beginPath(); g.moveTo(x, this.topo); g.lineTo(x, this.A); g.stroke();
     g.fillStyle = CORES.cursor;
-    g.beginPath(); g.moveTo(x - 5, TOPO); g.lineTo(x + 5, TOPO); g.lineTo(x, TOPO + 6); g.fill();
+    g.beginPath(); g.moveTo(x - 5, this.topo); g.lineTo(x + 5, this.topo); g.lineTo(x, this.topo + 6); g.fill();
   }
 
   // ---------------------------------------------------------------- mouse
@@ -497,15 +510,17 @@ export class Onda {
     return null;
   }
 
-  _alcaEm(x, y) {
+  _botaoEm(x, y) {
     for (const a of this.alcas) {
-      if (a._x != null && Math.abs(x - a._x) <= 11 && Math.abs(y - a._y) <= 19) return a;
+      for (const b of a._botoes || []) {
+        if (x >= b.x0 && x <= b.x1 && y >= b.y0 - 2 && y <= b.y1 + 2) return { alca: a, botao: b };
+      }
     }
     return null;
   }
 
   _regiaoEm(x, y) {
-    if (y < TOPO) return null;
+    if (y < this.topo) return null;
     for (const r of [...this.regioes].reverse()) {
       if (r.arrastavel && r._xa != null && x >= r._xa - 3 && x <= r._xb + 3) return r;
     }
@@ -539,13 +554,13 @@ export class Onda {
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
       const ponto = this._pontoEm(x, y);
-      const alca = ponto ? null : this._alcaEm(x, y);
-      const reg = ponto || alca ? null : this._regiaoEm(x, y);
+      const botao = ponto ? null : this._botaoEm(x, y);
+      const reg = ponto || botao ? null : this._regiaoEm(x, y);
       this.arrasto = {
         x0: x, y0: y, v0: this.v0, v1: this.v1, moveu: false, reg,
         ini0: reg ? reg.ini : null,
         desloc: reg ? this.t(x) - this.compassos[reg.ini] : 0,
-        alca, kNovo: alca ? alca.k : null, deslocAlca: alca ? this.t(x) - this.tk(alca.k) : 0,
+        botao,
         env: ponto?.env, ponto: ponto?.ponto,
         pontos0: ponto ? ponto.env.pontos.map((q) => ({ ...q })) : null,
       };
@@ -558,9 +573,13 @@ export class Onda {
       const y = e.clientY - r.top;
       const a = this.arrasto;
       if (!a) {
-        c.style.cursor = this._pontoEm(x, y) ? 'move' : this._alcaEm(x, y) ? 'ew-resize' : this._regiaoEm(x, y) ? 'grab' : 'pointer';
+        const b = this._botaoEm(x, y);
+        c.style.cursor = this._pontoEm(x, y) ? 'move' : b ? (b.botao.ativo ? 'pointer' : 'default') : this._regiaoEm(x, y) ? 'grab' : 'pointer';
+        const dica = b ? (b.botao.mais > 0 ? 'Um compasso a mais por cima da música' : 'Um compasso a menos por cima da música') : '';
+        if (c.title !== dica) c.title = dica;
         return;
       }
+      if (a.botao) return;
       if (Math.abs(x - a.x0) > 3 || (a.env && Math.abs(y - a.y0) > 3)) a.moveu = true;
       if (!a.moveu) return;
       if (a.env) {
@@ -570,17 +589,11 @@ export class Onda {
         let p = Math.round(this.posicaoNoBloco(e.kIni, e.kFim, this.t(x)) * bpc) / bpc;
         const outro = e.pontos[1 - a.ponto];
         p = a.ponto === 0 ? Math.min(p, outro.p) : Math.max(p, outro.p);
-        const topo = TOPO + FAIXA + 2;
+        const topo = this.topo + FAIXA + 2;
         const base = this.A - FAIXA - 2;
         const nivel = Math.round(Math.max(0, Math.min(1, 1 - (y - topo - 6) / (base - topo - 12))) * 20) / 20;
         const q = e.pontos[a.ponto];
         if (q.p !== p || q.nivel !== nivel) { e.pontos[a.ponto] = { p, nivel }; this.redesenhar(); }
-      } else if (a.alca) {
-        const al = a.alca;
-        const k = this.divisaoMaisPerto(this.t(x) - a.deslocAlca);
-        const mais = Math.max(al.min, Math.min(al.max, al.sentido * (k - al.k)));
-        const kNovo = al.k + al.sentido * mais;
-        if (kNovo !== a.kNovo) { a.kNovo = kNovo; this.redesenhar(); }
       } else if (a.reg) {
         c.style.cursor = 'grabbing';
         let k = this.compassoMaisPerto(this.t(x) - a.desloc);
@@ -606,10 +619,11 @@ export class Onda {
         const mudou = a.env.pontos.some((q, i) => q.p !== a.pontos0[i].p || q.nivel !== a.pontos0[i].nivel);
         this.redesenhar();
         if (mudou) this.aoMoverFader(a.env.id, a.env.pontos.map((q) => [q.p, q.nivel]));
-      } else if (a.alca) {
-        const mais = a.alca.sentido * (a.kNovo - a.alca.k);
-        this.redesenhar();
-        if (mais) this.aoMoverAlca(a.alca.id, mais);
+      } else if (a.botao) {
+        // vale se soltar em cima do mesmo botão
+        const b = this._botaoEm(x, e.clientY - r.top);
+        const igual = b && b.alca.id === a.botao.alca.id && b.botao.mais === a.botao.botao.mais;
+        if (igual && b.botao.ativo) this.aoClicarAlca(b.alca.id, b.botao.mais);
       } else if (a.reg && a.moveu) {
         if (a.reg.ini !== a.ini0) this.aoMoverRegiao(a.reg.id, a.reg.ini);
       } else if (!a.moveu) {
@@ -621,7 +635,7 @@ export class Onda {
       const a = this.arrasto;
       this.arrasto = null;
       if (a?.env) a.env.pontos = a.pontos0;
-      if (a?.env || a?.alca) this.redesenhar();
+      if (a?.env) this.redesenhar();
     });
     c.addEventListener('dblclick', () => {
       this.v0 = 0; this.v1 = this.duracao; this.redesenhar();
