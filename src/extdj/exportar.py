@@ -32,6 +32,16 @@ def destino(faixa: Faixa, pasta: Path, formato: str) -> Path:
     return pasta / f"{base_nome(faixa.info, faixa.caminho)} (Extended).{formato}"
 
 
+def _descrever(e: Escolha, lado: dict | None) -> str:
+    partes = [NOMES_MODO[e.modo]]
+    sobre = (lado or {}).get("sobrepor") or 0
+    if sobre:
+        partes.append(f"{sobre} por cima da música")
+    if (lado or {}).get("curva"):
+        partes.append("com fader")
+    return f"{e.lado} {e.compassos} compassos ({', '.join(partes)})"
+
+
 def gravar(faixa: Faixa, sinal: np.ndarray, meta: dict, intro: Escolha | None, outro: Escolha | None,
            pasta: Path, formato: str = "wav", com_json: bool = True) -> Path:
     """Grava o extended com as tags do original, BPM, tom e um comentário do que foi feito."""
@@ -40,14 +50,14 @@ def gravar(faixa: Faixa, sinal: np.ndarray, meta: dict, intro: Escolha | None, o
         "title": (faixa.info.get("titulo") or faixa.caminho.stem) + " (Extended)",
         "TBPM": bpm_tag(faixa.grade.bpm),
         "TKEY": faixa.info["tom"]["tom"],
-        "comment": "extdj: " + ", ".join(
-            f"{e.lado} {e.compassos} compassos ({NOMES_MODO[e.modo]})" for e in (intro, outro) if e),
+        "comment": "extdj: " + ", ".join(_descrever(e, meta.get(e.lado)) for e in (intro, outro) if e),
     }
     au.salvar(arq, sinal, SR, formato, origem=faixa.caminho, tags=tags)
     if com_json:
         dados = dict(meta)
         dados.pop("compassos_s", None)
         dados.pop("camadas_s", None)
+        dados.pop("musica_s", None)
         dados.update({"arquivo_original": faixa.caminho.name, "tom": faixa.info["tom"],
                       "estilos": faixa.info["estilos"]})
         arq.with_suffix(".extdj.json").write_text(json.dumps(dados, ensure_ascii=False, indent=2),

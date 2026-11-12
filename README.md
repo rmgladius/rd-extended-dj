@@ -40,9 +40,37 @@ No Windows, o `Extended DJ.exe` (veja [Gerar o .exe](#gerar-o-exe)) abre direto.
 3. ajuste o intro e o outro: tamanho, loop de quantos compassos e o que toca (camadas,
    música completa, instrumental, só bateria, bateria e baixo);
 4. arraste os quadros coloridos na onda da original para escolher de onde sai cada loop;
-5. ouça a prévia do extended (os botões **Ouvir entrada** e **Ouvir saída** pulam para as emendas);
-6. **Gerar extended** grava na pasta escolhida, em WAV, AIFF, FLAC ou MP3 320.
+5. se quiser mixar o loop com a música, arraste a alça **»** do intro ou **«** do outro na
+   onda do extended (ou use os botões « » em **Por cima**) e escolha o **Fader**
+   (veja [Mixagem](#mixagem));
+6. ouça a prévia do extended (os botões **Ouvir entrada** e **Ouvir saída** pulam para as emendas);
+7. **Gerar extended** grava na pasta escolhida, em WAV, AIFF, FLAC ou MP3 320.
    **Gerar todas** faz a lista inteira, cada uma com os próprios ajustes.
+
+### Mixagem
+
+Sem mixagem, o extended é `intro + música + outro`, um depois do outro. Com **Por cima**, o
+bloco entra na música em compassos inteiros: os últimos compassos do intro tocam junto com
+os primeiros da música, e os primeiros do outro junto com os últimos dela. O tamanho do
+bloco não muda, então o extended fica mais curto. Cada compasso do loop sobreposto é
+encaixado no compasso da música por baixo e no ataque da bateria dela, para os dois bumbos
+baterem juntos.
+
+O **Fader** muda o volume do loop aos poucos, como a mão no fader do mixer:
+
+- **Baixar** vai de 100% a 0% e **Subir** de 0% a 100%;
+- a rampa ocupa os compassos por cima da música (sem sobreposição, o bloco inteiro);
+- ao pôr o bloco por cima da música pela primeira vez, o fader já liga no sentido da
+  mixagem: o intro baixa enquanto a música entra e o outro sobe enquanto ela acaba;
+- na onda do extended a rampa é a linha branca. Os dois pontos podem ser arrastados, de
+  tempo em tempo na horizontal e de 5 em 5% na vertical. **voltar ao automático** desfaz.
+
+O nível segue a curva de um fader de mixer (no meio do caminho o loop está 12 dB abaixo).
+Música e loop juntos passam do volume máximo, então enquanto tocam juntos o volume da
+mixagem baixa devagar (em uns 0,6 s) e volta conforme o loop sai, sem cortar bumbo a bumbo.
+
+Na onda do extended, a faixa colorida de cima mostra o loop e a cinza de baixo a original:
+onde as duas aparecem, tocam juntos.
 
 Fora do .exe, a mesma tela abre com `uv run extdj-app`. No WSL não há janela: use
 `./extdj-app`, que abre no navegador do Windows.
@@ -76,6 +104,8 @@ um fica um `.extdj.json` com BPM, posição do primeiro tempo e onde cada parte 
 | `--modo` | de onde vem o loop (tabela abaixo) |
 | `--modo-outro` | modo diferente só para o outro |
 | `--inicio-intro K` / `--inicio-outro K` | força o loop a começar no compasso K da grade |
+| `--sobre-intro N` / `--sobre-outro N` | compassos do intro (ou do outro) tocando por cima da música |
+| `--fader-intro` / `--fader-outro` | `baixar` ou `subir` o loop aos poucos (veja [Mixagem](#mixagem)) |
 | `--formato` | `wav` (padrão), `aiff`, `flac` ou `mp3` |
 | `--saida PASTA` | pasta de destino |
 

@@ -237,6 +237,21 @@ select {
 .seg button.ativo { background: var(--texto); color: #0b0d10; }
 .seg button:disabled { opacity: 0.3; cursor: default; }
 .lado[data-lado="outro"] .seg button.ativo { background: var(--texto); }
+.passo { display: inline-flex; align-items: stretch; border: 1px solid var(--borda-forte); border-radius: 6px; overflow: hidden; }
+.passo button {
+  border: 0; background: var(--painel-2); padding: 3px 10px; cursor: pointer;
+  font-weight: 800; font-size: 15px; line-height: 1; color: var(--texto-2);
+}
+.passo button:hover:not(:disabled) { background: #262b33; color: var(--texto); }
+.passo button:disabled { opacity: 0.3; cursor: default; }
+.passo-valor {
+  min-width: 38px; display: grid; place-items: center; padding: 0 4px;
+  border-left: 1px solid var(--borda-forte); border-right: 1px solid var(--borda-forte);
+  font-variant-numeric: tabular-nums; font-weight: 700;
+}
+.lado[data-lado="intro"] .passo.ligado .passo-valor { color: var(--intro); }
+.lado[data-lado="outro"] .passo.ligado .passo-valor { color: var(--outro); }
+.fader-info { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .trecho { font-size: 13px; color: var(--texto-2); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; min-height: 20px; }
 .trecho b { color: var(--texto); }
 .plano { display: flex; height: 22px; border-radius: 4px; overflow: hidden; gap: 1px; }
@@ -245,6 +260,7 @@ select {
   font-size: 11px; font-weight: 700; color: #0b0d10;
   white-space: nowrap; overflow: hidden; min-width: 0;
 }
+.plano span.sobre { background-image: repeating-linear-gradient(135deg, rgba(0,0,0,0.32) 0 4px, transparent 4px 9px); }
 .lado.desligado .linha:not(:first-of-type), .lado.desligado .trecho, .lado.desligado .plano { opacity: 0.35; pointer-events: none; }
 
 /* ------------------------------------------------------------ barra de baixo */

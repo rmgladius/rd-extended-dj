@@ -1,5 +1,5 @@
 // Forma de onda em três faixas, com grade de compassos, zoom, regiões arrastáveis
-// (os loops) e o cursor de reprodução.
+// (os loops), blocos do extended com alça e linha de fader, e o cursor de reprodução.
 
 export const CORES = {
   graves: '#2f6fed',
@@ -29,6 +29,8 @@ export class Onda {
     this.ctx = canvas.getContext('2d');
     this.aoBuscar = opcoes.aoBuscar || (() => {});
     this.aoMoverRegiao = opcoes.aoMoverRegiao || (() => {});
+    this.aoMoverAlca = opcoes.aoMoverAlca || (() => {});
+    this.aoMoverFader = opcoes.aoMoverFader || (() => {});
     this.dados = null;
     this.duracao = 0;
     this.compassos = [];
@@ -38,6 +40,9 @@ export class Onda {
     this.faixas = [];      // {t0, t1, cor, alfa, onde: 'topo' | 'base'}
     this.fundos = [];      // {t0, t1, cor}
     this.marcos = [];      // {t, cor, rotulo}
+    this.blocos = [];      // {id, kIni, kFim, cor}: intro e outro no extended
+    this.alcas = [];       // {id, k, kIni, kFim, sentido, min, max, sobre, cor, seta}
+    this.envelopes = [];   // {id, kIni, kFim, cor, pontos: [{p, nivel}]}: linha do fader
     this.v0 = 0;
     this.v1 = 1;
     this.tempo = null;
@@ -73,6 +78,9 @@ export class Onda {
     this.faixas = [];
     this.fundos = [];
     this.marcos = [];
+    this.blocos = [];
+    this.alcas = [];
+    this.envelopes = [];
     this.compassos = [];
     this.tempo = null;
     this.redesenhar();
@@ -89,6 +97,19 @@ export class Onda {
   definirFaixas(faixas) { this.faixas = faixas; this.redesenhar(); }
   definirFundos(fundos) { this.fundos = fundos; this.redesenhar(); }
   definirMarcos(marcos) { this.marcos = marcos; this.redesenhar(); }
+  definirMixagem({ blocos = [], alcas = [], envelopes = [] }) {
+    this.blocos = blocos;
+    this.alcas = alcas;
+    this.envelopes = envelopes;
+    this.redesenhar();
+  }
+
+  mostrar(v0, v1) {
+    this.v0 = v0;
+    this.v1 = v1;
+    this._limitarVista();
+    this.redesenhar();
+  }
 
   definirTempo(t) {
     if (t === this.tempo) return;
@@ -131,6 +152,36 @@ export class Onda {
       if (c[m] <= t) a = m; else b = m - 1;
     }
     return a;
+  }
+
+  // início do compasso k; k igual ao número de compassos é o fim do último
+  tk(k) {
+    const c = this.compassos;
+    if (!c.length) return 0;
+    if (k < c.length) return c[Math.max(0, k)];
+    const ultimo = this.fimCompasso(c.length - 1);
+    return ultimo + (k - c.length) * (ultimo - c[c.length - 1]);
+  }
+
+  // tempo da posição p (em compassos, com fração) de um bloco que começa no compasso kIni
+  tempoNoBloco(kIni, p) {
+    const j = Math.floor(p);
+    const a = this.tk(kIni + j);
+    return a + (p - j) * (this.tk(kIni + j + 1) - a);
+  }
+
+  posicaoNoBloco(kIni, kFim, t) {
+    const tc = Math.max(this.tk(kIni), Math.min(this.tk(kFim), t));
+    const k = Math.max(kIni, Math.min(kFim - 1, this.compassoEm(tc)));
+    const a = this.tk(k);
+    return k - kIni + Math.min(1, (tc - a) / ((this.tk(k + 1) - a) || 1));
+  }
+
+  // compasso mais perto de t, contando o fim do último
+  divisaoMaisPerto(t) {
+    const k = this.compassoMaisPerto(t);
+    const n = this.compassos.length;
+    return Math.abs(this.tk(n) - t) < Math.abs(this.tk(k) - t) ? n : k;
   }
 
   compassoMaisPerto(t) {
@@ -204,6 +255,21 @@ export class Onda {
     }
 
     for (const r of this.regioes) this._regiao(g, r, topoOnda, baseOnda);
+    for (const b of this.blocos) this._bloco(g, b, topoOnda, baseOnda, 0);
+    const a = this.arrasto;
+    if (a?.alca && a.kNovo !== a.alca.k) {
+      // para onde o bloco vai ao soltar
+      const d = a.kNovo - a.alca.k;
+      const b = this.blocos.find((x) => x.id === a.alca.id);
+      if (b) this._bloco(g, b, topoOnda, baseOnda, d, true);
+      const sobre = a.alca.sobre + a.alca.sentido * d;
+      const xm = this.x(this.tk(a.kNovo));
+      g.font = '700 10px "Segoe UI", system-ui, sans-serif';
+      const texto = sobre ? `${sobre} ${sobre === 1 ? 'compasso' : 'compassos'} por cima da música` : 'fora da música';
+      this._etiqueta(g, a.alca.sentido > 0 ? xm + 12 : Math.max(0, xm - 12 - g.measureText(texto).width - 14), topoOnda + 4, texto, a.alca.cor, true);
+    }
+    for (const e of this.envelopes) this._envelope(g, e, topoOnda, baseOnda);
+    for (const al of this.alcas) this._alca(g, al, topoOnda, baseOnda);
 
     if (this.v1 - this.v0 < this.duracao - 0.01) {
       // indicador de onde a vista está na música inteira
@@ -313,6 +379,83 @@ export class Onda {
     r._xb = xb;
   }
 
+  _bloco(g, b, topo, base, desloc, fantasma) {
+    const xa = this.x(this.tk(b.kIni + desloc));
+    const xb = this.x(this.tk(b.kFim + desloc));
+    if (xb < 0 || xa > this.L) return;
+    g.save();
+    g.strokeStyle = b.cor;
+    g.lineWidth = fantasma ? 2 : 1.5;
+    g.globalAlpha = fantasma ? 0.95 : 0.7;
+    if (fantasma) {
+      g.setLineDash([6, 4]);
+      g.fillStyle = b.cor + '22';
+      g.fillRect(xa, topo, xb - xa, base - topo);
+    }
+    g.strokeRect(xa + 0.75, topo + 0.75, xb - xa - 1.5, base - topo - 1.5);
+    g.restore();
+  }
+
+  _alca(g, a, topo, base) {
+    const x = this.x(this.tk(a.k));
+    a._x = x;
+    a._y = (topo + base) / 2;
+    if (x < -12 || x > this.L + 12) return;
+    const w = 18;
+    const h = 34;
+    const arrastando = this.arrasto?.alca === a;
+    g.save();
+    g.globalAlpha = arrastando ? 0.45 : 1;
+    g.fillStyle = a.cor;
+    g.beginPath();
+    g.roundRect(x - w / 2, a._y - h / 2, w, h, 5);
+    g.fill();
+    g.fillStyle = '#0b0d10';
+    g.font = '800 15px "Segoe UI", system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(a.seta, x, a._y);
+    g.restore();
+  }
+
+  _yNivel(nivel, topo, base) { return topo + 6 + (1 - nivel) * (base - topo - 12); }
+
+  _envelope(g, e, topo, base) {
+    const xs = this.x(this.tk(e.kIni));
+    const xe = this.x(this.tk(e.kFim));
+    if (xe < 0 || xs > this.L) { e._pts = []; return; }
+    // na borda da tela o ponto entra um pouco, para dar para pegar
+    const dentro = (x) => (x >= -1 && x <= this.L + 1 ? Math.max(7, Math.min(this.L - 7, x)) : x);
+    const pts = e.pontos.map((q) => ({ x: dentro(this.x(this.tempoNoBloco(e.kIni, q.p))), y: this._yNivel(q.nivel, topo, base) }));
+    e._pts = pts;
+    const caminho = () => {
+      g.beginPath();
+      g.moveTo(xs, pts[0].y);
+      for (const q of pts) g.lineTo(q.x, q.y);
+      g.lineTo(xe, pts[pts.length - 1].y);
+    };
+    g.save();
+    g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(0,0,0,0.6)';
+    g.lineWidth = 4;
+    caminho(); g.stroke();
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 2;
+    caminho(); g.stroke();
+    const arr = this.arrasto;
+    pts.forEach((q, i) => {
+      g.fillStyle = e.cor;
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = 2;
+      g.beginPath(); g.arc(q.x, q.y, 6, 0, Math.PI * 2); g.fill(); g.stroke();
+      if (arr?.env === e && arr.ponto === i) {
+        const texto = `${Math.round(e.pontos[i].nivel * 100)}%`;
+        this._etiqueta(g, Math.min(this.L - 44, q.x + 9), Math.max(topo, q.y - 22), texto, e.cor, true);
+      }
+    });
+    g.restore();
+  }
+
   _etiqueta(g, x, y, texto, cor, cheia) {
     g.font = '700 10px "Segoe UI", system-ui, sans-serif';
     const w = g.measureText(texto).width + 10;
@@ -343,6 +486,23 @@ export class Onda {
   }
 
   // ---------------------------------------------------------------- mouse
+
+  _pontoEm(x, y) {
+    for (const e of [...this.envelopes].reverse()) {
+      const pts = e._pts || [];
+      for (let i = pts.length - 1; i >= 0; i--) {
+        if (Math.hypot(pts[i].x - x, pts[i].y - y) <= 9) return { env: e, ponto: i };
+      }
+    }
+    return null;
+  }
+
+  _alcaEm(x, y) {
+    for (const a of this.alcas) {
+      if (a._x != null && Math.abs(x - a._x) <= 11 && Math.abs(y - a._y) <= 19) return a;
+    }
+    return null;
+  }
 
   _regiaoEm(x, y) {
     if (y < TOPO) return null;
@@ -378,11 +538,16 @@ export class Onda {
       const r = c.getBoundingClientRect();
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
-      const reg = this._regiaoEm(x, y);
+      const ponto = this._pontoEm(x, y);
+      const alca = ponto ? null : this._alcaEm(x, y);
+      const reg = ponto || alca ? null : this._regiaoEm(x, y);
       this.arrasto = {
-        x0: x, v0: this.v0, v1: this.v1, moveu: false, reg,
+        x0: x, y0: y, v0: this.v0, v1: this.v1, moveu: false, reg,
         ini0: reg ? reg.ini : null,
         desloc: reg ? this.t(x) - this.compassos[reg.ini] : 0,
+        alca, kNovo: alca ? alca.k : null, deslocAlca: alca ? this.t(x) - this.tk(alca.k) : 0,
+        env: ponto?.env, ponto: ponto?.ponto,
+        pontos0: ponto ? ponto.env.pontos.map((q) => ({ ...q })) : null,
       };
       c.setPointerCapture(e.pointerId);
     });
@@ -393,12 +558,30 @@ export class Onda {
       const y = e.clientY - r.top;
       const a = this.arrasto;
       if (!a) {
-        c.style.cursor = this._regiaoEm(x, y) ? 'grab' : 'pointer';
+        c.style.cursor = this._pontoEm(x, y) ? 'move' : this._alcaEm(x, y) ? 'ew-resize' : this._regiaoEm(x, y) ? 'grab' : 'pointer';
         return;
       }
-      if (Math.abs(x - a.x0) > 3) a.moveu = true;
+      if (Math.abs(x - a.x0) > 3 || (a.env && Math.abs(y - a.y0) > 3)) a.moveu = true;
       if (!a.moveu) return;
-      if (a.reg) {
+      if (a.env) {
+        // ponto do fader: na horizontal anda de tempo em tempo, na vertical de 5 em 5%
+        const e = a.env;
+        const bpc = this.batidasPorCompasso;
+        let p = Math.round(this.posicaoNoBloco(e.kIni, e.kFim, this.t(x)) * bpc) / bpc;
+        const outro = e.pontos[1 - a.ponto];
+        p = a.ponto === 0 ? Math.min(p, outro.p) : Math.max(p, outro.p);
+        const topo = TOPO + FAIXA + 2;
+        const base = this.A - FAIXA - 2;
+        const nivel = Math.round(Math.max(0, Math.min(1, 1 - (y - topo - 6) / (base - topo - 12))) * 20) / 20;
+        const q = e.pontos[a.ponto];
+        if (q.p !== p || q.nivel !== nivel) { e.pontos[a.ponto] = { p, nivel }; this.redesenhar(); }
+      } else if (a.alca) {
+        const al = a.alca;
+        const k = this.divisaoMaisPerto(this.t(x) - a.deslocAlca);
+        const mais = Math.max(al.min, Math.min(al.max, al.sentido * (k - al.k)));
+        const kNovo = al.k + al.sentido * mais;
+        if (kNovo !== a.kNovo) { a.kNovo = kNovo; this.redesenhar(); }
+      } else if (a.reg) {
         c.style.cursor = 'grabbing';
         let k = this.compassoMaisPerto(this.t(x) - a.desloc);
         k = Math.max(a.reg.min ?? 0, Math.min(a.reg.max ?? this.compassos.length - a.reg.tam, k));
@@ -419,14 +602,27 @@ export class Onda {
       if (!a) return;
       const r = c.getBoundingClientRect();
       const x = e.clientX - r.left;
-      if (a.reg && a.moveu) {
+      if (a.env) {
+        const mudou = a.env.pontos.some((q, i) => q.p !== a.pontos0[i].p || q.nivel !== a.pontos0[i].nivel);
+        this.redesenhar();
+        if (mudou) this.aoMoverFader(a.env.id, a.env.pontos.map((q) => [q.p, q.nivel]));
+      } else if (a.alca) {
+        const mais = a.alca.sentido * (a.kNovo - a.alca.k);
+        this.redesenhar();
+        if (mais) this.aoMoverAlca(a.alca.id, mais);
+      } else if (a.reg && a.moveu) {
         if (a.reg.ini !== a.ini0) this.aoMoverRegiao(a.reg.id, a.reg.ini);
       } else if (!a.moveu) {
         this.aoBuscar(Math.max(0, Math.min(this.duracao, this.t(x))));
       }
     };
     c.addEventListener('pointerup', soltar);
-    c.addEventListener('pointercancel', () => { this.arrasto = null; });
+    c.addEventListener('pointercancel', () => {
+      const a = this.arrasto;
+      this.arrasto = null;
+      if (a?.env) a.env.pontos = a.pontos0;
+      if (a?.env || a?.alca) this.redesenhar();
+    });
     c.addEventListener('dblclick', () => {
       this.v0 = 0; this.v1 = this.duracao; this.redesenhar();
     });

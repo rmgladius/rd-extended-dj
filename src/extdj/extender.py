@@ -1,5 +1,8 @@
 """Escolhe o loop e monta o extended: intro em loop + música original + outro em loop.
 
+O intro e o outro podem entrar por cima da música (sobreposição, em compassos inteiros)
+e ter um fader que sobe ou baixa o loop aos poucos.
+
 Cada pedaço é copiado em compassos inteiros, com as posições acumuladas em ponto
 flutuante. A 128 BPM um compasso tem 82.687,5 amostras: arredondar compasso a
 compasso faria a grade escorregar ao longo do intro; aqui só a posição final de cada
@@ -8,7 +11,7 @@ emenda é arredondada, então o erro nunca passa de meia amostra.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 import numpy as np
 
@@ -17,6 +20,7 @@ from .analise import Faixa
 from .config import SR
 from .grade import envelope_ataques, fase_por_ataques
 
+FADERS = ("sem", "baixar", "subir")
 MODOS = ("auto", "completo", "instrumental", "batida", "batida_baixo", "camadas")
 NOMES_MODO = {
     "completo": "música completa",
@@ -40,6 +44,9 @@ class Escolha:
     nota: float
     camadas: list[str]
     ajuste_ms: float = 0.0   # quanto o loop foi deslocado para o ataque cair na grade
+    sobrepor: int = 0        # compassos do fim do intro (ou do começo do outro) por cima da música
+    fader: str = "sem"       # sem, baixar ou subir: o volume do loop muda aos poucos
+    fader_pontos: list | None = None   # [[compasso, nível], [compasso, nível]] escolhidos na tela
 
     def para_dict(self) -> dict:
         return asdict(self)
@@ -235,28 +242,34 @@ def _trecho(x: np.ndarray, ini: int, n: int) -> np.ndarray:
     return out
 
 
-def _colar(pedacos: list[tuple[str, float, float]], fontes: Fontes) -> tuple[np.ndarray, list[int]]:
-    """Cola os pedaços (fonte, início, fim em amostras) e devolve onde cada um começou."""
-    total = sum(b - a for _, a, b in pedacos)
-    out = np.zeros((int(np.ceil(total)) + PRE + XF + 2, 2), dtype=np.float32)
+def _tocar(out: np.ndarray, pedacos: list[tuple[str, float, float]], pos: float, fontes: Fontes,
+           abre: bool, fecha: bool) -> tuple[list[float], float]:
+    """Toca os pedaços (fonte, início, fim em amostras) um atrás do outro a partir de pos.
+
+    pos é a posição no extended, com fração. Cada pedaço entra PRE antes do seu tempo
+    forte; entre dois pedaços a troca é um cruzamento de XF amostras. Com `abre` o primeiro
+    também entra cruzando e com `fecha` o último sai cruzando; sem `fecha` ele vai até PRE
+    depois do fim, que é onde o extended termina. Devolve onde cada pedaço começou e a
+    posição final.
+    """
     sobe = np.linspace(0, 1, XF, dtype=np.float32)[:, None]
     desce = sobe[::-1]
-    pos = 0.0
-    marcas = []
+    inicios = []
     for i, (nome, a, b) in enumerate(pedacos):
+        inicios.append(pos)
         o0 = int(round(pos))
         pos += b - a
         o1 = int(round(pos))
         ultimo = i == len(pedacos) - 1
-        m = (o1 - o0) + (PRE if ultimo else XF)
+        m = (o1 - o0) + (PRE if ultimo and not fecha else XF)
         peca = _trecho(fontes[nome], int(round(a)) - PRE, m)
-        if i > 0:
+        if i > 0 or abre:
             peca[:XF] *= sobe
-        if not ultimo:
+        if not ultimo or fecha:
             peca[-XF:] *= desce
-        out[o0:o0 + m] += peca
-        marcas.append(o0 + PRE)
-    return out, marcas
+        m = min(m, len(out) - o0)
+        out[o0:o0 + m] += peca[:m]
+    return inicios, pos
 
 
 def _limitar(x: np.ndarray, teto: float = 0.97) -> np.ndarray:
@@ -281,34 +294,75 @@ def _limitar(x: np.ndarray, teto: float = 0.97) -> np.ndarray:
     return np.clip(x * g[:, None], -1, 1).astype(np.float32)
 
 
-def ajuste_local(faixa: Faixa, fontes: Fontes, inicio: int, tamanho: int) -> float:
+def _conter(x: np.ndarray, regioes: list[tuple[int, int]], teto: float = 0.97) -> None:
+    """Baixa o volume da mixagem onde o loop toca por cima da música, sem picotar.
+
+    Música e loop juntos passam do teto em toda batida. Cortar bumbo a bumbo (o que o
+    limitador rápido do fim faz com picos soltos) deixaria o som sujo e bombeando; aqui o
+    ganho anda devagar, uns 0,6 s para descer ou voltar, como quem segura o master da
+    mesa enquanto as duas tocam. Com o fader baixando o loop, o volume volta sozinho.
+    """
+    from scipy.ndimage import minimum_filter1d, uniform_filter1d
+
+    bloco = 512
+    h = max(1, int(round(0.3 * SR / bloco)))
+    margem = int(0.4 * SR)
+    for a, b in regioes:
+        a0, b0 = max(0, a - margem), min(len(x), b + margem)
+        if b0 - a0 < 4 * bloco:
+            continue
+        pico = np.abs(x[a0:b0]).max(axis=1)
+        nb = -(-len(pico) // bloco)
+        picos = np.pad(pico, (0, nb * bloco - len(pico))).reshape(nb, bloco).max(axis=1)
+        precisa = np.minimum(1.0, 0.97 * teto / np.maximum(picos, 1e-9))
+        if precisa.min() >= 1.0:
+            continue
+        # a janela do mínimo cobre a da média: em cada pico o ganho já chegou ao necessário
+        gb = uniform_filter1d(minimum_filter1d(precisa, size=2 * h + 3), size=2 * h + 1)
+        g = np.interp(np.arange(b0 - a0), np.arange(nb) * bloco + bloco / 2, gb)
+        # fora da sobreposição o ganho volta a 1 aos poucos
+        peso = np.ones(b0 - a0)
+        if a > a0:
+            peso[:a - a0] = np.linspace(0, 1, a - a0)
+        if b0 > b:
+            peso[b - a0:] = np.linspace(1, 0, b0 - b)
+        x[a0:b0] *= (1 - (1 - g) * peso).astype(np.float32)[:, None]
+
+
+def ajuste_local(faixa: Faixa, fontes: Fontes, inicio: int, tamanho: int, vizinhos: int = 1) -> float:
     """Deslocamento (s) que encosta o ataque da bateria do trecho na grade.
 
     A grade é uma média da música inteira; num trecho específico a batida pode estar
     alguns milissegundos fora. O loop é recortado já com essa correção, para não
-    "flamejar" contra a música original na entrada e na saída.
+    "flamejar" contra a música original na entrada e na saída. A medida inclui
+    `vizinhos` compassos de cada lado do trecho.
     """
     g = faixa.grade
     pb = g.batidas_por_compasso
-    k0, k1 = max(0, inicio - 1), min(len(g.compassos), inicio + tamanho + 1)
+    k0, k1 = max(0, inicio - vizinhos), min(len(g.compassos), inicio + tamanho + vizinhos)
     tempos = np.concatenate([g.compassos[k] + g.periodo * np.arange(pb) for k in range(k0, k1)])
     tempos_env, env = fontes.ataques(float(tempos.min()), float(tempos.max()))
     d, forca = fase_por_ataques(tempos, tempos_env, env, faixa.duracao, 0.015)
     return d if forca > 0.05 else 0.0
 
 
-def _pedacos_loop(faixa: Faixa, e: Escolha) -> list[tuple[str, float, float]]:
+def _pedacos_loop(faixa: Faixa, e: Escolha, comprimentos: list[float], j0: int = 0) -> list[tuple[str, float, float]]:
+    """Pedaços (fonte, início, fim em amostras) dos compassos j0, j0+1... do bloco.
+
+    `comprimentos` diz quanto cada compasso ocupa no extended: o tamanho do compasso de
+    onde ele sai ou, por cima da música, o do compasso da música que está por baixo.
+    """
     g = faixa.grade
     desloc = e.ajuste_ms / 1000 * SR
     out: list[tuple[str, float, float]] = []
-    for j in range(e.compassos):
+    for j, n in enumerate(comprimentos, start=j0):
         k = e.inicio + (j % e.tamanho)
-        a, b = g.compassos[k] * SR + desloc, g.fim_compasso(k) * SR + desloc
+        a = g.compassos[k] * SR + desloc
         nome = e.camadas[j]
         if out and out[-1][0] == nome and abs(out[-1][2] - a) < 1e-6:
-            out[-1] = (nome, out[-1][1], b)  # continua o mesmo trecho sem emenda
+            out[-1] = (nome, out[-1][1], a + n)  # continua o mesmo trecho sem emenda
         else:
-            out.append((nome, a, b))
+            out.append((nome, a, a + n))
     return out
 
 
@@ -327,30 +381,131 @@ def _entrada_original(faixa: Faixa) -> tuple[int, tuple[float, float] | None]:
     return k, None
 
 
+def curva_fader(e: Escolha, sobre: int) -> list[tuple[float, float]] | None:
+    """Os dois pontos do fader, (compasso dentro do bloco, nível de 0 a 1), ou None.
+
+    Sem pontos escolhidos na tela, a rampa ocupa os compassos que ficam por cima da
+    música (o bloco inteiro, se não houver sobreposição): baixar vai de 100% a 0% e
+    subir de 0% a 100%.
+    """
+    if e.fader not in ("baixar", "subir"):
+        return None
+    n = e.compassos
+    if e.fader_pontos and len(e.fader_pontos) == 2:
+        par = sorted((float(np.clip(p, 0, n)), float(np.clip(v, 0, 1))) for p, v in e.fader_pontos)
+        return [par[0], par[1]]
+    if sobre > 0:
+        p0, p1 = (n - sobre, n) if e.lado == "intro" else (0, sobre)
+    else:
+        p0, p1 = 0, n
+    n0, n1 = (1.0, 0.0) if e.fader == "baixar" else (0.0, 1.0)
+    return [(float(p0), n0), (float(p1), n1)]
+
+
+def _fader(x: np.ndarray, posicoes: np.ndarray, curva: list[tuple[float, float]]) -> None:
+    """Aplica o fader num bloco: o nível anda em linha reta entre os dois pontos.
+
+    O ganho é o nível ao quadrado, como num fader de mixer: no meio do caminho o loop
+    está 12 dB abaixo, e não pela metade do volume. `posicoes` é onde começa cada compasso
+    do bloco (e onde ele termina), nas amostras de x.
+    """
+    def amostra(p: float) -> float:
+        j = int(np.clip(np.floor(p), 0, len(posicoes) - 2))
+        return posicoes[j] + (p - j) * (posicoes[j + 1] - posicoes[j]) + PRE
+
+    (p0, n0), (p1, n1) = curva
+    s0, s1 = amostra(p0), amostra(p1)
+    t = np.arange(len(x), dtype=np.float64)
+    nivel = np.interp(t, [s0, s1], [n0, n1]) if s1 - s0 >= 1 else np.where(t < s0, n0, n1)
+    x *= (nivel * nivel).astype(np.float32)[:, None]
+
+
+def _bloco(out: np.ndarray, pedacos: list[tuple[str, float, float]], posicoes: np.ndarray, fontes: Fontes,
+           abre: bool, fecha: bool, curva) -> tuple[list[float], float]:
+    """Toca um bloco de loop (intro ou outro) em out, passando pelo fader se houver."""
+    if curva is None:
+        return _tocar(out, pedacos, float(posicoes[0]), fontes, abre, fecha)
+    a = max(0, int(np.floor(posicoes[0])))
+    b = min(len(out), int(np.ceil(posicoes[-1])) + PRE + XF + 4)
+    buf = np.zeros((b - a, 2), dtype=np.float32)
+    inicios, fim = _tocar(buf, pedacos, float(posicoes[0]) - a, fontes, abre, fecha)
+    _fader(buf, posicoes - a, curva)
+    out[a:b] += buf
+    return [x + a for x in inicios], fim + a
+
+
 def montar(faixa: Faixa, fontes: Fontes, intro: Escolha | None, outro: Escolha | None) -> tuple[np.ndarray, dict]:
+    """Monta o extended: intro, música original e outro, cada um na sua camada.
+
+    Sem sobreposição as três ficam uma depois da outra. Com `sobrepor`, os últimos
+    compassos do intro tocam junto com os primeiros da música (e os primeiros do outro
+    com os últimos dela), cada compasso do loop encaixado no compasso da música por baixo.
+    """
     g = faixa.grade
     n_total = len(faixa.audio)
     k_orig, anacruse = _entrada_original(faixa) if intro else (faixa.entrada, None)
     ini_orig = g.compassos[k_orig] * SR if intro else 0.0
     fim_orig = g.fim_compasso(faixa.saida - 1) * SR if outro else float(n_total)
+    k_fim = faixa.saida if outro else len(g.compassos)
 
-    pedacos: list[tuple[str, float, float]] = []
+    def tam(k: int) -> float:
+        return (g.fim_compasso(k) - g.compassos[k]) * SR
+
+    # compassos de cada bloco por cima da música: cabem no bloco e na música
+    n_orig = max(0, k_fim - k_orig)
+    s1 = int(np.clip(intro.sobrepor, 0, min(intro.compassos, n_orig))) if intro else 0
+    s2 = int(np.clip(outro.sobrepor, 0, min(outro.compassos, n_orig - s1))) if outro else 0
+    livres = intro.compassos - s1 if intro else 0
+
+    comp_i = comp_o = []
     if intro:
-        pedacos += _pedacos_loop(faixa, intro)
-    i_orig = len(pedacos)
-    pedacos.append(("completo", ini_orig, fim_orig))
+        comp_i = ([tam(intro.inicio + j % intro.tamanho) for j in range(livres)]
+                  + [tam(k_orig + j) for j in range(s1)])
     if outro:
-        pedacos += _pedacos_loop(faixa, outro)
+        comp_o = ([tam(faixa.saida - s2 + j) for j in range(s2)]
+                  + [tam(outro.inicio + j % outro.tamanho) for j in range(s2, outro.compassos)])
+    estimado = sum(comp_i[:livres]) + (fim_orig - ini_orig) + sum(comp_o[s2:])
+    out = np.zeros((int(np.ceil(estimado)) + PRE + XF + 8, 2), dtype=np.float32)
+    curva_i = curva_fader(intro, s1) if intro else None
+    curva_o = curva_fader(outro, s2) if outro else None
 
-    out, marcas = _colar(pedacos, fontes)
-    total = int(round(sum(b - a for _, a, b in pedacos))) + PRE
-    out = out[:total]
+    def por_cima(e: Escolha, k: int, n: int) -> Escolha:
+        """O bloco com o ataque encostado no da bateria da música por baixo (k a k+n-1).
+
+        A música toca como é, e a bateria dela pode estar uns milissegundos fora da grade
+        nesse trecho; os dois bumbos juntos, desencontrados, soariam ocos.
+        """
+        return replace(e, ajuste_ms=e.ajuste_ms - 1000 * ajuste_local(faixa, fontes, k, n, vizinhos=0))
+
+    pos_orig = 0.0
+    if intro:
+        # o trecho por cima da música é um pedaço à parte, para a música entrar exatamente
+        # onde ele começa, na mesma conta de posição
+        pedacos = _pedacos_loop(faixa, intro, comp_i[:livres])
+        n_livres = len(pedacos)
+        if s1:
+            pedacos += _pedacos_loop(faixa, por_cima(intro, k_orig, s1), comp_i[livres:], livres)
+        pos_i = np.concatenate([[0.0], np.cumsum(comp_i)])
+        inicios, fim = _bloco(out, pedacos, pos_i, fontes, False, True, curva_i)
+        pos_orig = inicios[n_livres] if s1 else fim
+    marca_orig = int(round(pos_orig)) + PRE
+    _tocar(out, [("completo", ini_orig, fim_orig)], pos_orig, fontes, bool(intro), bool(outro))
+    fim_musica = pos_orig + (fim_orig - ini_orig)
+    fim = fim_musica
+    if outro:
+        p0 = pos_orig + (g.compassos[faixa.saida - s2] * SR - ini_orig) if s2 else fim_musica
+        pos_o = p0 + np.concatenate([[0.0], np.cumsum(comp_o)])
+        pedacos = _pedacos_loop(faixa, outro, comp_o[s2:], s2)
+        if s2:
+            pedacos = _pedacos_loop(faixa, por_cima(outro, faixa.saida - s2, s2), comp_o[:s2]) + pedacos
+        _, fim = _bloco(out, pedacos, pos_o, fontes, True, False, curva_o)
+    out = out[:int(round(fim)) + PRE]
 
     # começo da música antes do primeiro compasso inteiro, por cima do fim do intro
     if anacruse is not None:
         s_a, s_b = anacruse
         n = int(round(s_b - s_a)) - PRE + XF
-        o = marcas[i_orig] - PRE - (int(round(s_b - s_a)) - PRE)
+        o = marca_orig - PRE - (int(round(s_b - s_a)) - PRE)
         if n > 2 * XF and o >= 0:
             peca = _trecho(fontes["completo"], int(round(s_a)), n)
             rampa = min(int(0.02 * SR), n // 2)
@@ -358,11 +513,11 @@ def montar(faixa: Faixa, fontes: Fontes, intro: Escolha | None, outro: Escolha |
             peca[-XF:] *= np.linspace(1, 0, XF, dtype=np.float32)[:, None]
             out[o:o + n] += peca
 
-    # rabo da música (fade, reverb) por cima do começo do outro, sem bateria e baixo:
+    # rabo da música (fade, reverb) por cima do outro, sem bateria e baixo:
     # quem segura a batida ali é o loop, e a pancada final dobraria por cima dele
+    o_fim = int(round(fim_musica))
     if outro and fim_orig < n_total:
         compasso = g.periodo * g.batidas_por_compasso * SR
-        o_fim = marcas[i_orig + 1] - PRE
         rabo = _trecho(fontes["sem_batida"], int(round(fim_orig)) - PRE, n_total - int(round(fim_orig)) + PRE)
         rabo = rabo[:int(4 * compasso)]
         env = np.ones(len(rabo), dtype=np.float32)
@@ -374,43 +529,67 @@ def montar(faixa: Faixa, fontes: Fontes, intro: Escolha | None, outro: Escolha |
         out[o_fim:o_fim + len(rabo)] += rabo * env[:len(rabo), None]
 
     # fecha com 10 ms de fade para não terminar em estalo
-    fim = int(0.01 * SR)
-    out[-fim:] *= np.linspace(1, 0, fim, dtype=np.float32)[:, None]
+    fim_fade = int(0.01 * SR)
+    out[-fim_fade:] *= np.linspace(1, 0, fim_fade, dtype=np.float32)[:, None]
+    juntos = []
+    if s1:
+        juntos.append((marca_orig - PRE, int(round(pos_i[-1])) + PRE + XF))
+    if s2:
+        juntos.append((int(round(pos_o[0])), o_fim + PRE + XF))
+    if juntos:
+        _conter(out, juntos)
     out = _limitar(out)
 
-    # início de cada compasso no extended e o que toca nele, para desenhar a grade na tela
+    # início de cada compasso no extended, o que toca nele e se a música está por baixo,
+    # para desenhar a grade na tela
     compassos_s: list[float] = []
     camadas_s: list[str] = []
+    musica_s: list[bool] = []
 
-    def loop_na_grade(e: Escolha, t: float) -> None:
-        for j in range(e.compassos):
-            k = e.inicio + j % e.tamanho
-            compassos_s.append(t)
-            camadas_s.append(e.camadas[j])
-            t += g.fim_compasso(k) - g.compassos[k]
+    def marcar(t: float, camada: str, musica: bool) -> None:
+        compassos_s.append(t)
+        camadas_s.append(camada)
+        musica_s.append(musica)
 
-    if intro:
-        loop_na_grade(intro, PRE / SR)
-    t_orig = marcas[i_orig] / SR - ini_orig / SR
-    k_fim = faixa.saida if outro else len(g.compassos)
+    for j in range(livres):
+        marcar((pos_i[j] + PRE) / SR, intro.camadas[j], False)
+    t_orig = (marca_orig - ini_orig) / SR
     for k in range(k_orig if intro else 0, k_fim):
-        if g.compassos[k] + t_orig >= 0:
-            compassos_s.append(g.compassos[k] + t_orig)
-            camadas_s.append("musica")
-    if outro:
-        loop_na_grade(outro, marcas[i_orig + 1] / SR)
+        if g.compassos[k] + t_orig < 0:
+            continue
+        camada = "musica"
+        if intro and k - k_orig < s1:
+            camada = intro.camadas[livres + k - k_orig]
+        elif outro and k >= faixa.saida - s2:
+            camada = outro.camadas[k - faixa.saida + s2]
+        marcar(g.compassos[k] + t_orig, camada, True)
+    for j in range(s2, outro.compassos if outro else 0):
+        marcar((pos_o[j] + PRE) / SR, outro.camadas[j], False)
+
+    def lado(e: Escolha, sobre: int, curva) -> dict:
+        d = e.para_dict()
+        d.update(sobrepor=sobre, curva=[list(p) for p in curva] if curva else None)
+        return d
 
     meta = {
         "bpm": round(g.bpm, 3),
         "andamento_variavel": g.variavel,
         "primeiro_tempo_s": round(PRE / SR, 4),
-        "inicio_original_s": round(marcas[i_orig] / SR, 3),
+        "inicio_original_s": round(marca_orig / SR, 3),
         "duracao_s": round(len(out) / SR, 2),
-        "intro": intro.para_dict() if intro else None,
-        "outro": outro.para_dict() if outro else None,
+        "intro": lado(intro, s1, curva_i) if intro else None,
+        "outro": lado(outro, s2, curva_o) if outro else None,
+        # quanto cada bloco ainda pode entrar na música
+        "sobrepor_max": {"intro": min(intro.compassos, n_orig - s2) if intro else 0,
+                         "outro": min(outro.compassos, n_orig - s1) if outro else 0},
     }
+    if intro:
+        meta["intro_s"] = [round(PRE / SR, 4), round((pos_i[-1] + PRE) / SR, 4)]
     if outro:
-        meta["inicio_outro_s"] = round(marcas[i_orig + 1] / SR, 3)
+        meta["inicio_outro_s"] = round((int(round(pos_o[0])) + PRE) / SR, 3)
+        meta["fim_original_s"] = round((o_fim + PRE) / SR, 3)
+        meta["outro_s"] = [round((pos_o[0] + PRE) / SR, 4), round((pos_o[-1] + PRE) / SR, 4)]
     meta["compassos_s"] = [round(x, 4) for x in compassos_s]
     meta["camadas_s"] = camadas_s
+    meta["musica_s"] = musica_s
     return out, meta

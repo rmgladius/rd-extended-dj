@@ -92,6 +92,8 @@ def cmd_analisar(args) -> int:
 
 
 def cmd_estender(args) -> int:
+    from dataclasses import replace
+
     from .analise import analisar
     from .exportar import gravar
     from .extender import NOMES_MODO, Fontes, escolher, montar
@@ -113,9 +115,11 @@ def cmd_estender(args) -> int:
             intro = outro = None
             if args.intro > 0:
                 intro = escolher(f, fontes, "intro", args.intro, args.loop, args.modo, args.inicio_intro)
+                intro = replace(intro, sobrepor=args.sobre_intro, fader=args.fader_intro or "sem")
             if args.outro > 0:
                 outro = escolher(f, fontes, "outro", args.outro, args.loop,
                                  args.modo_outro or args.modo, args.inicio_outro)
+                outro = replace(outro, sobrepor=args.sobre_outro, fader=args.fader_outro or "sem")
             sinal, meta = montar(f, fontes, intro, outro)
             destino = gravar(f, sinal, meta, intro, outro, saida, args.formato)
         except Exception as e:
@@ -157,6 +161,12 @@ def main(argv: list[str] | None = None) -> int:
                                            "batida_baixo", "camadas"), help="modo diferente para o outro")
     e.add_argument("--inicio-intro", type=int, help="força o loop do intro a começar neste índice de compasso")
     e.add_argument("--inicio-outro", type=int, help="força o loop do outro a começar neste índice de compasso")
+    e.add_argument("--sobre-intro", type=int, default=0,
+                   help="compassos do fim do intro tocando por cima do começo da música")
+    e.add_argument("--sobre-outro", type=int, default=0,
+                   help="compassos do começo do outro tocando por cima do fim da música")
+    e.add_argument("--fader-intro", choices=("baixar", "subir"), help="volume do loop do intro mudando aos poucos")
+    e.add_argument("--fader-outro", choices=("baixar", "subir"), help="volume do loop do outro mudando aos poucos")
     e.add_argument("--formato", default="wav", choices=au.FORMATOS)
     e.add_argument("--saida", default="saida", help="pasta de saída (padrão: saida)")
     e.add_argument("--sem-cache", action="store_true", help="refaz a análise do zero")

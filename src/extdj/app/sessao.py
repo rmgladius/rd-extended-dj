@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import queue
 import shutil
 import threading
@@ -10,7 +11,7 @@ import time
 import traceback
 import uuid
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -23,7 +24,7 @@ from . import forma
 TOCA_DIRETO = {".mp3", ".wav", ".flac", ".ogg", ".opus", ".m4a", ".aac"}
 FAIXAS_NA_MEMORIA = 2   # cada música aberta ocupa ~1 GB (áudio + stems)
 
-LADO_PADRAO = {"compassos": 32, "loop": 4, "modo": "auto"}
+LADO_PADRAO = {"compassos": 32, "loop": 4, "modo": "auto", "sobrepor": 0, "fader": "sem"}
 
 
 def _pasta_musicas() -> Path:
@@ -95,7 +96,7 @@ class OpcoesInvalidas(ValueError):
 
 def _lado(dados: dict | None, nome: str):
     """Valida as opções de um lado (intro ou outro) vindas da tela."""
-    from ..extender import MODOS
+    from ..extender import FADERS, MODOS
 
     d = dict(LADO_PADRAO)
     d.update(dados or {})
@@ -110,8 +111,24 @@ def _lado(dados: dict | None, nome: str):
     if modo not in MODOS:
         raise OpcoesInvalidas(f"Modo desconhecido: {modo}")
     inicio = d.get("inicio")
+    try:
+        sobrepor = min(max(int(d.get("sobrepor") or 0), 0), compassos)
+    except (TypeError, ValueError) as e:
+        raise OpcoesInvalidas(f"Sobreposição do {nome} inválida.") from e
+    fader = d.get("fader") or "sem"
+    if fader not in FADERS:
+        raise OpcoesInvalidas(f"Fader desconhecido: {fader}")
+    pontos = d.get("fader_pontos")
+    if pontos is not None:
+        try:
+            pontos = [[float(p), float(v)] for p, v in pontos]
+        except (TypeError, ValueError) as e:
+            raise OpcoesInvalidas(f"Pontos do fader do {nome} inválidos.") from e
+        if len(pontos) != 2 or not all(math.isfinite(x) for par in pontos for x in par):
+            pontos = None
     return {"compassos": compassos, "loop": loop, "modo": modo,
-            "inicio": None if inicio is None else int(inicio)}
+            "inicio": None if inicio is None else int(inicio),
+            "sobrepor": sobrepor, "fader": fader, "fader_pontos": pontos}
 
 
 class Sessao:
@@ -127,6 +144,7 @@ class Sessao:
         self._trava_faixas = threading.Lock()
         self._trava_montagem = threading.Lock()
         self._previas: dict[str, tuple[str, np.ndarray, dict, object, object]] = {}
+        self._escolhas: dict[str, tuple[str, object, object]] = {}
         self._seq: dict[str, int] = {}
         self.pasta_envios = pasta_cache() / "enviadas"
         self.pasta_previas = pasta_cache() / "previas"
@@ -187,6 +205,7 @@ class Sessao:
         with self._trava_faixas:
             self._faixas.pop(mid, None)
         self._previas.pop(mid, None)
+        self._escolhas.pop(mid, None)
         if m and m.enviada:
             shutil.rmtree(m.caminho.parent, ignore_errors=True)
 
@@ -250,6 +269,7 @@ class Sessao:
             fontes.impressoes(fonte)
         m.resumo = self._resumo(f)
         m.detalhes = self._detalhes(f)
+        self._escolhas.pop(m.id, None)   # analisada de novo: a grade pode ter mudado
         with self._trava_faixas:
             # só ocupa a memória se houver lugar: não tira a música que está sendo editada
             if len(self._faixas) < FAIXAS_NA_MEMORIA:
@@ -346,13 +366,30 @@ class Sessao:
         for op in (intro_op, outro_op):
             if op and op["inicio"] is not None:
                 op["inicio"] = int(np.clip(op["inicio"], 0, max(0, n - op["loop"])))
-        try:
-            intro = (escolher(f, fontes, "intro", intro_op["compassos"], intro_op["loop"], intro_op["modo"],
-                              intro_op["inicio"]) if intro_op else None)
-            outro = (escolher(f, fontes, "outro", outro_op["compassos"], outro_op["loop"], outro_op["modo"],
-                              outro_op["inicio"]) if outro_op else None)
-        except (RuntimeError, ValueError) as e:
-            raise OpcoesInvalidas(str(e)) from e
+
+        # o loop escolhido só depende destas opções: mexer na sobreposição ou no fader
+        # remonta o extended sem procurar o trecho de novo
+        def do_loop(op):
+            return op and {k: op[k] for k in ("compassos", "loop", "modo", "inicio")}
+
+        chave_loop = json.dumps([do_loop(intro_op), do_loop(outro_op)], sort_keys=True)
+        guardadas = self._escolhas.get(mid)
+        if guardadas and guardadas[0] == chave_loop:
+            intro, outro = guardadas[1:]
+        else:
+            try:
+                intro = (escolher(f, fontes, "intro", intro_op["compassos"], intro_op["loop"], intro_op["modo"],
+                                  intro_op["inicio"]) if intro_op else None)
+                outro = (escolher(f, fontes, "outro", outro_op["compassos"], outro_op["loop"], outro_op["modo"],
+                                  outro_op["inicio"]) if outro_op else None)
+            except (RuntimeError, ValueError) as e:
+                raise OpcoesInvalidas(str(e)) from e
+            self._escolhas[mid] = (chave_loop, intro, outro)
+
+        def mixagem(e, op):
+            return e and replace(e, sobrepor=op["sobrepor"], fader=op["fader"], fader_pontos=op["fader_pontos"])
+
+        intro, outro = mixagem(intro, intro_op), mixagem(outro, outro_op)
         sinal, meta = montar(f, fontes, intro, outro)
         self._previas[mid] = (chave, sinal, meta, intro, outro)
         return sinal, meta, intro, outro
@@ -365,7 +402,7 @@ class Sessao:
         with self._trava_montagem:
             if self._seq.get(mid, 0) > seq:
                 return None
-            sinal, meta, intro, outro = self._montar(mid, opcoes)
+            sinal, meta, _, _ = self._montar(mid, opcoes)
             versao = uuid.uuid4().hex[:8]
             for velho in self.pasta_previas.glob(f"{mid}-previa-*.wav"):
                 try:
@@ -379,8 +416,8 @@ class Sessao:
             "seq": seq,
             "versao": versao,
             "meta": meta,
-            "intro": intro.para_dict() if intro else None,
-            "outro": outro.para_dict() if outro else None,
+            "intro": meta["intro"],
+            "outro": meta["outro"],
             "onda": onda,
             "duracao": round(len(sinal) / SR, 3),
             "batidas_por_compasso": g.batidas_por_compasso,

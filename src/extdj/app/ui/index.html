@@ -102,6 +102,20 @@
               <label>O que toca</label>
               <select data-campo="modo"></select>
             </div>
+            <div class="linha">
+              <label>Por cima</label>
+              <div class="passo" data-campo="sobrepor">
+                <button data-passo="-1" title="Tirar um compasso de cima da música">«</button><span class="passo-valor">0</span><button data-passo="1" title="Mais um compasso por cima da música">»</button>
+              </div>
+              <span class="unid">compassos dentro da música</span>
+            </div>
+            <div class="linha">
+              <label>Fader</label>
+              <div class="seg" data-campo="fader">
+                <button data-v="sem">Sem</button><button data-v="baixar">Baixar</button><button data-v="subir">Subir</button>
+              </div>
+              <span class="unid fader-info"></span>
+            </div>
             <div class="trecho"></div>
             <div class="plano"></div>
           </section>
@@ -128,6 +142,20 @@
             <div class="linha">
               <label>O que toca</label>
               <select data-campo="modo"></select>
+            </div>
+            <div class="linha">
+              <label>Por cima</label>
+              <div class="passo" data-campo="sobrepor">
+                <button data-passo="1" title="Mais um compasso por cima da música">«</button><span class="passo-valor">0</span><button data-passo="-1" title="Tirar um compasso de cima da música">»</button>
+              </div>
+              <span class="unid">compassos dentro da música</span>
+            </div>
+            <div class="linha">
+              <label>Fader</label>
+              <div class="seg" data-campo="fader">
+                <button data-v="sem">Sem</button><button data-v="baixar">Baixar</button><button data-v="subir">Subir</button>
+              </div>
+              <span class="unid fader-info"></span>
             </div>
             <div class="trecho"></div>
             <div class="plano"></div>
@@ -157,6 +185,7 @@
             <div id="x-carregando" class="carregando" hidden><span class="giro"></span>Montando a prévia</div>
             <div id="x-erro" class="carregando erro" hidden></div>
           </div>
+          <p class="dica">Faixa de cima: o loop · faixa de baixo: a original · arraste a alça » do intro ou « do outro para dentro da música · com o fader ligado, arraste os pontos da linha branca</p>
         </section>
       </div>
     </section>

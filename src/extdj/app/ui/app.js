@@ -30,7 +30,9 @@ const S = {
   opcoes: new Map(),
   previas: new Map(),
   config: null,
-  seq: 0,
+  // ordem dos pedidos de prévia: parte do relógio para continuar crescendo se a janela
+  // recarregar (o servidor descarta pedidos com número menor que o último)
+  seq: Date.now(),
   exportando: new Set(),
   ultimoPlayer: 'extended',
 };
@@ -92,8 +94,11 @@ function aviso(texto, erro) {
 // ------------------------------------------------------------------ opções por música
 
 function padraoLado(lado) {
-  const c = S.config?.[lado] || { compassos: 32, loop: 4, modo: 'auto' };
-  return { compassos: c.compassos, loop: c.loop, modo: c.modo, inicio: null };
+  const c = S.config?.[lado] || {};
+  return {
+    compassos: c.compassos ?? 32, loop: c.loop ?? 4, modo: c.modo ?? 'auto', inicio: null,
+    sobrepor: c.sobrepor ?? 0, fader: c.fader ?? 'sem', fader_pontos: null,
+  };
 }
 function opcoesDe(id) {
   if (!S.opcoes.has(id)) S.opcoes.set(id, { intro: padraoLado('intro'), outro: padraoLado('outro') });
@@ -102,7 +107,7 @@ function opcoesDe(id) {
 
 let configTempo;
 function salvarPadrao(lado, op) {
-  S.config[lado] = { compassos: op.compassos, loop: op.loop, modo: op.modo };
+  S.config[lado] = { compassos: op.compassos, loop: op.loop, modo: op.modo, sobrepor: op.sobrepor, fader: op.fader };
   clearTimeout(configTempo);
   configTempo = setTimeout(() => api('config', { intro: S.config.intro, outro: S.config.outro }).catch(() => {}), 400);
 }
@@ -306,8 +311,16 @@ const ondaOriginal = new Onda($('#onda-original'), {
 });
 const ondaExtended = new Onda($('#onda-extended'), {
   aoBuscar: (t) => tocarEm('extended', t),
+  // alça » do intro ou « do outro: quantos compassos a mais (ou a menos) por cima da música
+  aoMoverAlca: (lado, mais) => definirSobreposicao(lado, sobreValendo(lado) + mais, true),
+  aoMoverFader: (lado, pontos) => {
+    opcoesDe(S.sel)[lado].fader_pontos = pontos;
+    desenharLados();
+    pedirPrevia(true);
+  },
 });
-window.__ondaOriginal = ondaOriginal;  // usado pelos testes automáticos da tela
+window.__ondaOriginal = ondaOriginal;  // usados pelos testes automáticos da tela
+window.__ondaExtended = ondaExtended;
 
 const players = { original: new Audio(), extended: new Audio() };
 for (const p of Object.values(players)) p.preload = 'auto';
@@ -320,6 +333,7 @@ async function selecionar(id) {
   for (const p of Object.values(players)) { p.pause(); p.removeAttribute('src'); p.load(); }
   ondaOriginal.limpar();
   ondaExtended.limpar();
+  S.vistaExtended = null;
   $('#t-original').textContent = '0:00';
   $('#t-extended').textContent = '0:00';
   $('#x-duracao').textContent = '';
@@ -416,18 +430,37 @@ for (const cartao of $$('.lado')) {
   const lado = cartao.dataset.lado;
   cartao.addEventListener('click', (e) => {
     const b = e.target.closest('.seg button');
+    const op = opcoesDe(S.sel)[lado];
     if (b && !b.disabled) {
       const campo = b.closest('.seg').dataset.campo;
-      const op = opcoesDe(S.sel)[lado];
-      op[campo] = Number(b.dataset.v);
-      if (op.compassos && op.loop > op.compassos) op.loop = op.compassos;
+      if (campo === 'fader') {
+        op.fader = b.dataset.v;
+        op.fader_pontos = null;   // escolher de novo volta a rampa automática
+      } else {
+        op[campo] = Number(b.dataset.v);
+        if (op.compassos && op.loop > op.compassos) op.loop = op.compassos;
+        if (campo === 'compassos') {
+          op.sobrepor = Math.min(op.sobrepor, op.compassos);
+          op.fader_pontos = null;
+        }
+      }
       salvarPadrao(lado, op);
       desenharLados();
       pedirPrevia();
       return;
     }
+    const passo = e.target.closest('[data-passo]');
+    if (passo && !passo.disabled) {
+      definirSobreposicao(lado, Math.min(op.sobrepor, sobreMaximo(lado)) + Number(passo.dataset.passo));
+      return;
+    }
     if (e.target.closest('[data-acao="auto"]')) {
-      opcoesDe(S.sel)[lado].inicio = null;
+      op.inicio = null;
+      desenharLados();
+      pedirPrevia(true);
+    }
+    if (e.target.closest('[data-acao="fader-auto"]')) {
+      op.fader_pontos = null;
       desenharLados();
       pedirPrevia(true);
     }
@@ -439,6 +472,41 @@ for (const cartao of $$('.lado')) {
     desenharLados();
     pedirPrevia(true);
   });
+}
+
+// ------------------------------------------------------------------ sobreposição e fader
+
+// quanto o bloco pode entrar na música (a última prévia sabe o tamanho dela e do outro lado)
+function sobreMaximo(lado) {
+  const op = opcoesDe(S.sel)[lado];
+  const mx = S.previas.get(S.sel)?.meta?.sobrepor_max?.[lado];
+  return Math.min(op.compassos, mx ?? op.compassos);
+}
+// a sobreposição que valeu na última prévia (pode ter sido cortada para caber na música)
+function sobreValendo(lado) {
+  const m = S.previas.get(S.sel)?.meta?.[lado];
+  return m ? m.sobrepor : opcoesDe(S.sel)[lado].sobrepor;
+}
+function definirSobreposicao(lado, n, imediato) {
+  const op = opcoesDe(S.sel)[lado];
+  const antes = Math.min(op.sobrepor, sobreMaximo(lado));
+  const novo = Math.max(0, Math.min(sobreMaximo(lado), n));
+  if (novo === antes && novo === op.sobrepor) { desenharLados(); return; }
+  op.sobrepor = novo;
+  // quando o bloco entra na música o fader já vem no sentido da mixagem: o intro baixa
+  // enquanto a música entra, o outro sobe enquanto ela acaba. Saindo de cima dela, esse
+  // fader automático desliga (senão a rampa passaria para o bloco inteiro)
+  const natural = lado === 'intro' ? 'baixar' : 'subir';
+  if (antes === 0 && novo > 0 && op.fader === 'sem') op.fader = natural;
+  else if (antes > 0 && novo === 0 && op.fader === natural && !op.fader_pontos) op.fader = 'sem';
+  salvarPadrao(lado, op);
+  desenharLados();
+  pedirPrevia(imediato);
+}
+
+function textoCompassos(n) {
+  const v = Math.round(n * 4) / 4;
+  return `${String(v).replace('.', ',')} ${v === 1 ? 'compasso' : 'compassos'}`;
 }
 
 function desenharLados() {
@@ -461,16 +529,35 @@ function desenharLados() {
       }
     }
     $('select', cartao).value = op.modo;
+    for (const b of $$('.seg[data-campo="fader"] button', cartao)) b.classList.toggle('ativo', op.fader === b.dataset.v);
+    const sobre = Math.min(op.sobrepor, sobreMaximo(lado));
+    $('.passo-valor', cartao).textContent = op.compassos ? sobre : 0;
+    $('.passo', cartao).classList.toggle('ligado', sobre > 0);
+    for (const b of $$('[data-passo]', cartao)) {
+      const d = Number(b.dataset.passo);
+      b.disabled = !op.compassos || (d < 0 ? sobre <= 0 : sobre >= sobreMaximo(lado));
+    }
 
     const escolha = pv?.[lado];
     const res = $('.resultado', cartao);
     const trecho = $('.trecho', cartao);
     const plano = $('.plano', cartao);
+    const info = $('.fader-info', cartao);
     if (!op.compassos) {
       res.textContent = 'desligado';
       trecho.innerHTML = '';
       plano.innerHTML = '';
+      info.innerHTML = '';
       continue;
+    }
+    const curva = escolha?.curva;
+    if (op.fader === 'sem' || !curva) {
+      info.textContent = op.fader === 'sem' ? 'volume do loop fixo' : '';
+    } else {
+      const [[p0, n0], [p1, n1]] = curva;
+      const pct = (v) => `${Math.round(v * 100)}%`;
+      info.innerHTML = `<span>${pct(n0)} → ${pct(n1)} em ${textoCompassos(p1 - p0)}</span>` +
+        (op.fader_pontos ? '<button class="link" data-acao="fader-auto">voltar ao automático</button>' : '');
     }
     res.textContent = escolha ? (op.modo === 'auto' ? `automático escolheu: ${NOME_MODO[escolha.modo] || escolha.modo}` : '') : '';
     const ini = op.inicio ?? escolha?.inicio;
@@ -487,14 +574,20 @@ function desenharLados() {
     } else {
       trecho.textContent = '';
     }
-    // plano de camadas: blocos seguidos com o que toca em cada parte
+    // plano de camadas: blocos seguidos com o que toca em cada parte (listrado: por cima da música)
     const camadas = escolha?.camadas || [];
+    const s = escolha ? escolha.sobrepor : 0;
     const blocos = [];
-    for (const c of camadas) {
-      if (blocos.length && blocos[blocos.length - 1].c === c) blocos[blocos.length - 1].n++;
-      else blocos.push({ c, n: 1 });
-    }
-    plano.innerHTML = blocos.map((b) => `<span style="flex:${b.n};background:${COR_CAMADA[b.c]}" title="${b.n} compassos: ${NOME_CAMADA[b.c]}">${b.n} · ${NOME_CAMADA[b.c]}</span>`).join('');
+    camadas.forEach((c, j) => {
+      const sob = lado === 'intro' ? j >= camadas.length - s : j < s;
+      const ult = blocos[blocos.length - 1];
+      if (ult && ult.c === c && ult.sob === sob) ult.n++;
+      else blocos.push({ c, n: 1, sob });
+    });
+    plano.innerHTML = blocos.map((b) => {
+      const titulo = `${b.n} compassos: ${NOME_CAMADA[b.c]}${b.sob ? ', por cima da música' : ''}`;
+      return `<span class="${b.sob ? 'sobre' : ''}" style="flex:${b.n};background-color:${COR_CAMADA[b.c]}" title="${titulo}">${b.n} · ${NOME_CAMADA[b.c]}</span>`;
+    }).join('');
   }
   ondaOriginal.definirRegioes(regioes);
 }
@@ -539,24 +632,54 @@ function aplicarPrevia(id, r) {
   const p = players.extended;
   const tocando = !p.paused;
   const posicao = p.currentTime || 0;
+  // com zoom, a vista e o cursor ficam no mesmo ponto da música quando ela anda
+  // (o intro entrando nela encurta o começo do extended)
+  const ant = S.vistaExtended?.id === id ? S.vistaExtended : null;
+  const anda = ant ? meta.inicio_original_s - ant.ini : 0;
+  const zoom = ant && ondaExtended.pronto && ondaExtended.v1 - ondaExtended.v0 < ondaExtended.duracao - 0.01
+    ? [ondaExtended.v0 + anda, ondaExtended.v1 + anda] : null;
   ondaExtended.definirDados(r.onda, r.duracao);
-  const inicioMusica = meta.compassos_s.findIndex((_, i) => meta.camadas_s[i] === 'musica');
+  if (zoom) ondaExtended.mostrar(...zoom);
+  S.vistaExtended = { id, ini: meta.inicio_original_s };
   ondaExtended.definirGrade(meta.compassos_s, r.batidas_por_compasso, (k) => k + 1);
-  const faixas = meta.compassos_s.map((t, i) => ({
-    t0: t,
-    t1: meta.compassos_s[i + 1] ?? r.duracao,
-    cor: COR_CAMADA[meta.camadas_s[i]] || '#555',
-    onde: 'topo',
-  }));
+  // em cima o loop, embaixo a original: onde as duas faixas aparecem, tocam juntos
+  const musica = meta.musica_s || meta.camadas_s.map((c) => c === 'musica');
+  const faixas = [];
+  meta.compassos_s.forEach((t, i) => {
+    const t1 = meta.compassos_s[i + 1] ?? r.duracao;
+    const cam = meta.camadas_s[i];
+    if (cam !== 'musica') faixas.push({ t0: t, t1, cor: COR_CAMADA[cam] || '#555', onde: 'topo' });
+    if (musica[i]) faixas.push({ t0: t, t1, cor: COR_CAMADA.musica, onde: 'base' });
+  });
   ondaExtended.definirFaixas(faixas);
   const fundos = [];
-  if (meta.intro) fundos.push({ t0: 0, t1: meta.inicio_original_s, cor: 'rgba(45,212,191,0.07)' });
-  if (meta.outro) fundos.push({ t0: meta.inicio_outro_s, t1: r.duracao, cor: 'rgba(244,114,182,0.07)' });
+  if (meta.intro) fundos.push({ t0: 0, t1: meta.intro_s[1], cor: 'rgba(45,212,191,0.07)' });
+  if (meta.outro) fundos.push({ t0: meta.outro_s[0], t1: r.duracao, cor: 'rgba(244,114,182,0.07)' });
   ondaExtended.definirFundos(fundos);
   const marcos = [];
-  if (meta.intro && inicioMusica >= 0) marcos.push({ t: meta.inicio_original_s, cor: COR.intro, rotulo: 'música' });
+  if (meta.intro) marcos.push({ t: meta.inicio_original_s, cor: COR.intro, rotulo: 'música' });
   if (meta.outro) marcos.push({ t: meta.inicio_outro_s, cor: COR.outro, rotulo: 'outro' });
+  if (meta.outro?.sobrepor) marcos.push({ t: meta.fim_original_s, cor: COR.outro, rotulo: 'fim da música' });
   ondaExtended.definirMarcos(marcos);
+
+  const n = meta.compassos_s.length;
+  const blocos = [];
+  const alcas = [];
+  const envelopes = [];
+  for (const lado of ['intro', 'outro']) {
+    const e = meta[lado];
+    if (!e) continue;
+    const kIni = lado === 'intro' ? 0 : n - e.compassos;
+    const kFim = kIni + e.compassos;
+    const mx = meta.sobrepor_max[lado];
+    blocos.push({ id: lado, kIni, kFim, cor: COR[lado] });
+    alcas.push({
+      id: lado, k: lado === 'intro' ? kFim : kIni, kIni, kFim, sentido: lado === 'intro' ? 1 : -1,
+      min: -e.sobrepor, max: mx - e.sobrepor, sobre: e.sobrepor, cor: COR[lado], seta: lado === 'intro' ? '»' : '«',
+    });
+    if (e.curva) envelopes.push({ id: lado, kIni, kFim, cor: COR[lado], pontos: e.curva.map(([q, v]) => ({ p: q, nivel: v })) });
+  }
+  ondaExtended.definirMixagem({ blocos, alcas, envelopes });
 
   const orig = S.musicas.find((m) => m.id === id)?.resumo?.duracao || 0;
   const extra = r.duracao - orig;
@@ -565,7 +688,7 @@ function aplicarPrevia(id, r) {
   p.src = `/audio/${id}/previa?v=${r.versao}&t=${TOKEN}`;
   if (tocando || posicao > 0) {
     p.addEventListener('loadedmetadata', () => {
-      p.currentTime = Math.min(posicao, r.duracao - 0.1);
+      p.currentTime = Math.max(0, Math.min(posicao + anda, r.duracao - 0.1));
       if (tocando) p.play().catch(() => {});
     }, { once: true });
   }
