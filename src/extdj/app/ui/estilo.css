@@ -325,7 +325,7 @@ select {
 
 /* ------------------------------------------------------------ sobre */
 
-.sobre {
+.painel-sobre {
   position: fixed; inset: 0; z-index: 20;
   background: rgba(11, 12, 16, 0.88);
   display: grid; place-items: center;

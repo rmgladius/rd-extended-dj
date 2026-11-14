@@ -621,6 +621,10 @@ function desenharLados() {
       const titulo = `${b.n} compassos: ${NOME_CAMADA[b.c]}${b.sob ? ', por cima da música' : ''}`;
       return `<span class="${b.sob ? 'sobre' : ''}" style="flex:${b.n};background-color:${COR_CAMADA[b.c]}" title="${titulo}">${b.n} · ${NOME_CAMADA[b.c]}</span>`;
     }).join('');
+    // bloco estreito demais para o nome (poucos compassos por cima da música): fica só o número
+    for (const el of plano.children) {
+      if (el.scrollWidth > el.clientWidth) el.textContent = el.textContent.split(' · ')[0];
+    }
   }
   ondaOriginal.definirRegioes(regioes);
   const h = S.historico.get(id);

@@ -1,195 +1,97 @@
-# RD Extended DJ
+<p align="center">
+  <img src="docs/imagens/capa.png" alt="RD Extended DJ: qualquer música vira extended" width="100%">
+</p>
 
-Cria versões extended de músicas para mixar em beat match: um intro e um outro em loop,
-do tamanho que você escolher, encaixados na grade de batidas da música original.
+<p align="center">
+  <a href="https://github.com/rmgladius/rd-extended-dj/releases/latest/download/RD-Extended-DJ-Windows.zip"><b>Baixar para Windows</b></a>
+  &nbsp;·&nbsp; Windows 10 e 11, 64 bits &nbsp;·&nbsp; grátis e sem instalação
+</p>
 
-Para cada música, o programa:
+RD Extended DJ é um programa para DJs que transforma qualquer música numa versão extended. Ele descobre
+o BPM e o tom, escolhe o melhor trecho para repetir e monta um começo e um fim em loop, do tamanho que
+você quiser. É só arrastar as músicas para a janela.
 
-1. detecta o BPM e o início de cada compasso;
-2. separa bateria, baixo, voz e o resto (Demucs);
-3. mede o tom (notação tradicional e Camelot), o estilo e o padrão da batida;
-4. procura o trecho que repete melhor, sem voz e com batida firme;
-5. monta `intro em loop + música original + outro em loop` e grava com as tags.
+<p align="center">
+  <img src="docs/imagens/demo.webp" alt="Músicas arrastadas para a janela. O programa analisa a primeira, o intro passa para 64 compassos, o loop do outro muda de trecho, o intro entra por cima da música com o fader baixando, a emenda toca e o extended é gravado." width="100%">
+</p>
 
-## Instalação
+## Para que serve
 
-Precisa do [uv](https://docs.astral.sh/uv/) e do ffmpeg no PATH.
+Muita música chega na versão de rádio: a voz começa no primeiro segundo e o fim é seco. Assim não
+sobra tempo para encaixar a próxima. O extended resolve isso com um começo e um fim só de batida, na
+mesma velocidade da música.
 
-```bash
-uv sync
-```
+<p align="center">
+  <img src="docs/imagens/extended.svg" alt="Como fica um extended: intro em loop que começa só na bateria e vai crescendo, a música original e um outro em loop que termina só na bateria." width="100%">
+</p>
 
-No WSL, deixe o ambiente fora do disco do Windows (o PyTorch fica muito lento em `/mnt`):
+## Lê a música para você
 
-```bash
-export UV_PROJECT_ENVIRONMENT=$HOME/.venvs/extended-dj
-```
+<p align="center">
+  <img src="docs/imagens/leitura.png" alt="Música aberta no programa: BPM 102, tom Bb (6B), estilo Tropical House, batida 4 no chão, voz desde o compasso 1, e a onda com os trechos dos loops marcados." width="100%">
+</p>
 
-O atalho `./extdj` já faz isso. A placa NVIDIA é usada quando existe; sem ela, roda no
-processador (mais lento na separação). No Mac com chip M, usa a GPU do Mac.
+Ao abrir uma música, o programa mostra o BPM, o tom, o estilo, o tipo de batida e o compasso em que a
+voz entra. O tom também sai no código Camelot, que diz quais músicas combinam entre si. Na onda, os
+quadros coloridos marcam os trechos que viram loop.
 
-Na primeira execução são baixados três modelos: Demucs (80 MB), beat_this e
-Discogs-EffNet (18 MB, de um servidor lento: pode levar alguns minutos).
+## Intro e outro do seu jeito
 
-## Programa com janela
+<p align="center">
+  <img src="docs/imagens/ajustes.png" alt="Ajustes do intro e do outro: tamanho, loop, o que toca, quanto entra por cima da música e fader." width="100%">
+</p>
 
-No Windows, o `RD Extended DJ.exe` (veja [Gerar o .exe](#gerar-o-exe)) abre direto. O caminho é:
+- **Tamanho:** 8, 16, 32 ou 64 compassos. Também dá para fazer só o intro ou só o outro.
+- **O que toca:** em camadas (começa na bateria e vai crescendo), só a bateria, bateria e baixo, sem a
+  voz ou a música inteira. No automático, o programa escolhe.
+- **Trecho:** se não gostar do loop escolhido, arraste o quadro colorido para outra parte da música.
 
-1. arraste as músicas (ou uma pasta) para a janela, ou clique em **Adicionar**;
-2. cada música é analisada na hora: BPM, tom em Camelot, estilo, batida e onde a voz entra;
-3. ajuste o intro e o outro: tamanho, loop de quantos compassos e o que toca (camadas,
-   música completa, instrumental, só bateria, bateria e baixo);
-4. arraste os quadros coloridos na onda da original para escolher de onde sai cada loop;
-5. se quiser mixar o loop com a música, clique em **« »** na emenda do intro ou do outro,
-   na onda do extended (ou em **Por cima**, no cartão), e escolha o **Fader**
-   (veja [Mixagem](#mixagem)). **Desfazer** (ou Ctrl+Z) volta a última mudança e
-   **Resetar** volta a música aos ajustes de quando ela foi aberta;
-6. ouça a prévia do extended (os botões **Ouvir entrada** e **Ouvir saída** pulam para as emendas);
-7. **Gerar extended** grava na pasta escolhida, em WAV, AIFF, FLAC ou MP3 320.
-   **Gerar todas** faz a lista inteira, cada uma com os próprios ajustes.
+## Mixagem pronta no arquivo
 
-### Mixagem
+<p align="center">
+  <img src="docs/imagens/mixagem.png" alt="Onda do extended com o intro entrando por cima da música e o fader baixando, e o outro começando antes do fim da música com o fader subindo." width="100%">
+</p>
 
-Sem mixagem, o extended é `intro + música + outro`, um depois do outro. Com **Por cima**, o
-bloco entra na música em compassos inteiros: os últimos compassos do intro tocam junto com
-os primeiros da música, e os primeiros do outro junto com os últimos dela. O tamanho do
-bloco não muda, então o extended fica mais curto. Cada compasso do loop sobreposto é
-encaixado no compasso da música por baixo e no ataque da bateria dela, para os dois bumbos
-baterem juntos.
+O intro pode continuar tocando por cima do começo da música, e o outro pode entrar antes de ela acabar,
+como numa mixagem ao vivo. O fader abaixa ou sobe o loop aos poucos, e as batidas dos dois ficam
+alinhadas.
 
-O **Fader** muda o volume do loop aos poucos, como a mão no fader do mixer:
+## Ouça antes de gravar
 
-- **Baixar** vai de 100% a 0% e **Subir** de 0% a 100%;
-- a rampa ocupa os compassos por cima da música (sem sobreposição, o bloco inteiro);
-- ao pôr o bloco por cima da música pela primeira vez, o fader já liga no sentido da
-  mixagem: o intro baixa enquanto a música entra e o outro sobe enquanto ela acaba;
-- na onda do extended a rampa é a linha branca. Os dois pontos podem ser arrastados, de
-  tempo em tempo na horizontal e de 5 em 5% na vertical. **voltar ao automático** desfaz.
+**Ouvir entrada** e **Ouvir saída** tocam direto as emendas. Gostou? **Gerar extended** grava o arquivo
+em WAV, AIFF, FLAC ou MP3 320, com o nome e o artista da música original e "(Extended)" no fim. **Gerar
+todas** faz a lista inteira, cada música com os próprios ajustes. A música original não muda.
 
-Na onda do extended, o **« N »** na emenda de cada bloco mostra quantos compassos estão
-por cima da música; cada clique anda o bloco um compasso para o lado da seta.
+## Como baixar e abrir
 
-O nível segue a curva de um fader de mixer (no meio do caminho o loop está 12 dB abaixo).
-Música e loop juntos passam do volume máximo, então enquanto tocam juntos o volume da
-mixagem baixa devagar (em uns 0,6 s) e volta conforme o loop sai, sem cortar bumbo a bumbo.
+1. Clique em [**Baixar para Windows**](https://github.com/rmgladius/rd-extended-dj/releases/latest/download/RD-Extended-DJ-Windows.zip).
+   Vem um arquivo .zip de uns 570 MB.
+2. Clique nele com o botão direito e escolha **Extrair tudo**.
+3. Abra a pasta **RD Extended DJ** e dê dois cliques em **RD Extended DJ.exe**.
 
-Na onda do extended, a faixa colorida de cima mostra o loop e a cinza de baixo a original:
-onde as duas aparecem, tocam juntos.
+Não precisa instalar nada e, depois de baixado, funciona sem internet.
 
-Fora do .exe, a mesma tela abre com `uv run extdj-app`. No WSL não há janela: use
-`./extdj-app`, que abre no navegador do Windows.
+- **"O Windows protegeu o computador":** o aviso aparece porque o programa é novo e não tem assinatura
+  paga. Clique em **Mais informações** e depois em **Executar assim mesmo**.
+- **Primeira vez de cada música:** leva um minuto e meio ou mais, conforme o computador, porque o
+  programa separa bateria, baixo e voz. Depois fica guardado e a música abre na hora.
+- **Espaço:** o programa ocupa 1,3 GB, e cada música aberta guarda uns 140 MB. O **limpar**, no topo
+  da janela, apaga o que não estiver em uso.
+- **Janela em branco no Windows 10:** instale o
+  [WebView2 da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/), que o Windows 11
+  já traz.
+- **Versão nova:** baixe pelo mesmo botão e troque a pasta antiga pela nova.
 
-Os instrumentos separados ficam guardados (uns 140 MB por música), para a música abrir
-na hora da segunda vez. Acima de 15 GB os mais antigos saem sozinhos; o **limpar** no topo
-da janela apaga os das músicas que não estão abertas.
+Todas as versões ficam em [Releases](https://github.com/rmgladius/rd-extended-dj/releases).
 
-## Linha de comando
+## Para quem programa
 
-```bash
-# planilha com BPM, tom, estilo, batida e onde a voz entra
-./extdj analisar "/caminho/da/pasta"
-
-# extended com intro e outro de 32 compassos, loop de 4 (o padrão)
-./extdj estender "/caminho/da/pasta"
-
-# intro de 64, sem outro, loop de 8, em MP3 320
-./extdj estender musica.mp3 --intro 64 --outro 0 --loop 8 --formato mp3
-```
-
-Os arquivos vão para `saida/`, com " (Extended)" no nome e no título. Ao lado de cada
-um fica um `.extdj.json` com BPM, posição do primeiro tempo e onde cada parte começa.
-
-### Opções do `estender`
-
-| Opção | O que faz |
-|---|---|
-| `--intro N` / `--outro N` | compassos adicionados no começo / no fim (0 desliga) |
-| `--loop N` | compassos do trecho que se repete: 1, 2, 4, 8 ou 16 |
-| `--modo` | de onde vem o loop (tabela abaixo) |
-| `--modo-outro` | modo diferente só para o outro |
-| `--inicio-intro K` / `--inicio-outro K` | força o loop a começar no compasso K da grade |
-| `--sobre-intro N` / `--sobre-outro N` | compassos do intro (ou do outro) tocando por cima da música |
-| `--fader-intro` / `--fader-outro` | `baixar` ou `subir` o loop aos poucos (veja [Mixagem](#mixagem)) |
-| `--formato` | `wav` (padrão), `aiff`, `flac` ou `mp3` |
-| `--saida PASTA` | pasta de destino |
-
-### Modos
-
-| Modo | Loop feito com |
-|---|---|
-| `auto` | música completa, se houver um trecho limpo sem voz; senão, em camadas |
-| `completo` | a música como ela é |
-| `instrumental` | tudo menos a voz |
-| `batida` | só a bateria |
-| `batida_baixo` | bateria e baixo |
-| `camadas` | intro que vai crescendo: bateria na primeira metade, bateria e baixo, depois instrumental (em 32 compassos: 16 + 8 + 8). O outro faz o caminho inverso |
-
-## Como funciona
-
-- **Grade:** batidas pelo [beat_this](https://github.com/CPJKU/beat_this). Quando o
-  detector alterna entre andamento cheio e meio-tempo (comum em trap e pop), a grade
-  fica no andamento rápido até 155 BPM. O BPM é refinado pelo ataque da bateria
-  isolada: se a fase escorrega ao longo da música, o BPM é corrigido (0,01 BPM de erro
-  já dá 15 ms no fim de uma faixa de 4 minutos).
-- **Contratempo:** em alguns trechos o detector marca o "e" de cada tempo (acontece
-  no funk, em que o tamborzão bate forte no contratempo). Esses trechos ficam fora da
-  conta, senão cada um somaria uma batida e a grade sairia com o BPM errado e o
-  primeiro tempo fora do lugar.
-- **Andamento variável:** música com baterista ao vivo é detectada. O loop sai do
-  trecho vizinho ao intro ou ao outro, no andamento local.
-- **Emendas:** cada loop é recortado em compassos inteiros e encostado no ataque da
-  bateria do próprio trecho. A emenda dura 3 ms e termina antes do tempo forte. As
-  posições são acumuladas em ponto flutuante, então a grade não escorrega.
-- **Anacruse e rabo:** se a música começa antes do primeiro tempo (uma voz puxando a
-  frase), esse começo toca por cima do fim do intro. A música vai até o último
-  compasso com batida até o fim; o que vem depois (pancada final, fade, reverb) toca
-  por cima do começo do outro sem a bateria e o baixo, que ali vêm do loop.
-- **Tom:** croma sem a bateria, comparado com os perfis de Krumhansl, Temperley e EDMA
-  (Faraldo et al., 2016, feito para música eletrônica).
-- **Estilo:** [Discogs-EffNet](https://essentia.upf.edu/models.html), 400 estilos do
-  Discogs. Não tem funk brasileiro; para isso virão os estilos aprendidos por exemplo.
-- **Tags:** título, artista, álbum e afins são copiados, além da capa no MP3. Grade e
-  cue points do Traktor e do Serato no arquivo original não são copiados, porque
-  estariam errados no extended.
-
-## Gerar o .exe
-
-Roda no Windows (o PyInstaller não gera .exe a partir do Linux):
-
-1. coloque um ffmpeg "shared" em `build\ffmpeg` (`ffmpeg.exe`, `ffprobe.exe` e as DLLs `av*` e `sw*`),
-   por exemplo de [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) ou do
-   [BtbN](https://github.com/BtbN/FFmpeg-Builds/releases);
-2. rode `empacotar\construir.bat`. Ele instala o ambiente em `build\venv-win`, junta os modelos
-   em `build\modelos` (ou use `empacotar/juntar_modelos.py` num ambiente que já os tenha
-   baixado) e chama o PyInstaller.
-
-Sai em `build\dist\RD Extended DJ\`: a pasta inteira é o programa (o .exe precisa das pastas ao
-lado). Com o PyTorch com CUDA dentro, ela tem uns 5 GB e funciona em qualquer Windows 10 ou
-11 de 64 bits; com placa NVIDIA usa a placa, sem ela usa o processador (a separação de uma
-música de 3 minutos leva perto de 80 s em vez de 8 s).
-
-Para conferir um pacote sem abrir a janela:
-
-```bat
-"RD Extended DJ.exe" --teste musica.mp3 --saida-teste C:\pasta
-```
-
-O resultado vai para `%LOCALAPPDATA%\extdj\cache\extdj.log`.
-
-## Testes
-
-```bash
-uv run pytest
-```
-
-## Créditos e licenças
-
-- beat_this, CPJKU (MIT)
-- Demucs, Alexandre Défossez / Meta (MIT)
-- Discogs-EffNet, MTG / Universitat Pompeu Fabra (CC BY-NC-SA 4.0, uso sem fins comerciais)
-- pywebview (BSD) e WebView2 da Microsoft, para a janela
-- FFmpeg (LGPL ou GPL, conforme o build usado no .exe)
+Feito em Python. A separação dos instrumentos é do [Demucs](https://github.com/adefossez/demucs), as
+batidas do [beat_this](https://github.com/CPJKU/beat_this) e o estilo do
+[Discogs-EffNet](https://essentia.upf.edu/models.html). A janela é uma página HTML aberta pelo
+[pywebview](https://pywebview.flowrl.com). Como rodar o código, a linha de comando, os detalhes de cada
+parte e como gerar o .exe: [docs/COMO-FUNCIONA.md](docs/COMO-FUNCIONA.md).
 
 ---
 
-Feito por [Rodrigo Dias](https://github.com/rmgladius). Contato e versão no botão **Sobre**, no topo da janela.
+Feito por [Rodrigo Dias](https://github.com/rmgladius). Gratuito e sem fins comerciais.

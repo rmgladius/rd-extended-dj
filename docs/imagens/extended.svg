@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="262" viewBox="0 0 960 262" role="img" aria-labelledby="t" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif">
+  <title id="t">Como fica um extended: intro em loop que começa só na bateria e vai crescendo, a música original e um outro em loop que termina só na bateria</title>
+  <defs>
+    <clipPath id="c-intro"><rect x="40" y="86" width="296" height="56" rx="10"/></clipPath>
+    <clipPath id="c-outro"><rect x="624" y="86" width="296" height="56" rx="10"/></clipPath>
+  </defs>
+  <rect width="960" height="262" rx="24" fill="#0B0C10"/>
+
+  <text x="40" y="70" font-size="12" font-weight="700" letter-spacing="1" fill="#2DD4BF">INTRO EM LOOP</text>
+  <text x="344" y="70" font-size="12" font-weight="700" letter-spacing="1" fill="#A3ABB7">MÚSICA</text>
+  <text x="920" y="70" font-size="12" font-weight="700" letter-spacing="1" fill="#F472B6" text-anchor="end">OUTRO EM LOOP</text>
+
+  <g clip-path="url(#c-intro)">
+    <rect x="40" y="86" width="148" height="56" fill="#5B6CF0"/>
+    <rect x="188" y="86" width="74" height="56" fill="#9B6CF6"/>
+    <rect x="262" y="86" width="74" height="56" fill="#F2A53A"/>
+    <path d="M77 130v12M114 130v12M151 130v12M188 130v12M225 130v12M262 130v12M299 130v12" stroke="#0B0C10" stroke-opacity="0.45" stroke-width="2"/>
+  </g>
+  <text x="114" y="115" font-size="13" font-weight="700" fill="#0B0D10" text-anchor="middle">só a bateria</text>
+  <text x="225" y="115" font-size="13" font-weight="700" fill="#0B0D10" text-anchor="middle">+ baixo</text>
+  <text x="299" y="115" font-size="13" font-weight="700" fill="#0B0D10" text-anchor="middle">sem voz</text>
+
+  <rect x="344" y="86" width="272" height="56" rx="10" fill="#2A2F37"/>
+  <text x="480" y="115" font-size="13" font-weight="700" fill="#E7EAEE" text-anchor="middle">a música original</text>
+
+  <g clip-path="url(#c-outro)">
+    <rect x="624" y="86" width="74" height="56" fill="#F2A53A"/>
+    <rect x="698" y="86" width="74" height="56" fill="#9B6CF6"/>
+    <rect x="772" y="86" width="148" height="56" fill="#5B6CF0"/>
+    <path d="M661 130v12M698 130v12M735 130v12M772 130v12M809 130v12M846 130v12M883 130v12" stroke="#0B0C10" stroke-opacity="0.45" stroke-width="2"/>
+  </g>
+  <text x="661" y="115" font-size="13" font-weight="700" fill="#0B0D10" text-anchor="middle">sem voz</text>
+  <text x="735" y="115" font-size="13" font-weight="700" fill="#0B0D10" text-anchor="middle">+ baixo</text>
+  <text x="846" y="115" font-size="13" font-weight="700" fill="#0B0D10" text-anchor="middle">só a bateria</text>
+
+  <text x="40" y="174" font-size="13" fill="#A3ABB7">Começa só na batida e vai crescendo,</text>
+  <text x="40" y="193" font-size="13" fill="#A3ABB7">para você entrar na mixagem com calma.</text>
+  <text x="344" y="174" font-size="13" fill="#A3ABB7">Do jeito que ela é, sem cortes.</text>
+  <text x="624" y="174" font-size="13" fill="#A3ABB7">Termina só na batida, para a próxima</text>
+  <text x="624" y="193" font-size="13" fill="#A3ABB7">música entrar no tempo certo.</text>
+
+  <text x="40" y="234" font-size="13" fill="#6F7886">Cada risco é uma volta do loop. O tamanho vai de 8 a 64 compassos, sempre no BPM da própria música.</text>
+</svg>
