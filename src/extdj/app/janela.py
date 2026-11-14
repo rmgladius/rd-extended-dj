@@ -16,7 +16,7 @@ from pathlib import Path
 
 from ..config import CONGELADO, pasta_cache
 
-TITULO = "Extended DJ"
+TITULO = "RD Extended DJ"
 
 
 def _preparar_ambiente() -> None:
@@ -125,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
 
     multiprocessing.freeze_support()
     _preparar_ambiente()
-    p = argparse.ArgumentParser(prog="extdj-app", description="Extended DJ com janela")
+    p = argparse.ArgumentParser(prog="extdj-app", description="RD Extended DJ com janela")
     p.add_argument("--navegador", action="store_true", help="abre no navegador em vez da janela")
     p.add_argument("--porta", type=int, default=0, help="porta do servidor local (padrão: livre)")
     p.add_argument("--sem-abrir", action="store_true", help="só o servidor, sem abrir nada")

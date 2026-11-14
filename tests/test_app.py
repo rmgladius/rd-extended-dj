@@ -8,6 +8,7 @@ import numpy as np
 from scipy.ndimage import minimum_filter1d, uniform_filter1d
 from test_basico import _faixa_cliques
 
+from extdj import __version__
 from extdj.config import SR
 from extdj.extender import PRE, Escolha, Fontes, _limitar, montar
 
@@ -85,6 +86,7 @@ def test_servidor_exige_codigo(tmp_path):
         base = srv.endereco
         st, _, corpo = _pedir(base)
         assert st == 200 and srv.token.encode() in corpo
+        assert f"Versão {__version__}".encode() in corpo and b"__VERSAO__" not in corpo
         assert _pedir(base + "api/estado")[0] == 403
         assert _pedir(base + "api/estado", {"X-Token": "errado"})[0] == 403
         st, _, corpo = _pedir(base + "api/estado", {"X-Token": srv.token})

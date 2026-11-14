@@ -1,5 +1,5 @@
 @echo off
-rem Gera o programa para Windows em build\dist\Extended DJ\Extended DJ.exe
+rem Gera o programa para Windows em build\dist\RD Extended DJ\RD Extended DJ.exe
 rem Antes, coloque o ffmpeg (versao "shared": ffmpeg.exe, ffprobe.exe e as DLLs) em build\ffmpeg
 rem e rode empacotar\juntar_modelos.py para preencher build\modelos.
 setlocal
@@ -17,4 +17,4 @@ if not exist "build\modelos\demucs\htdemucs.yaml" (
 )
 "%UV%" run --frozen pyinstaller empacotar\extdj.spec --noconfirm --clean --distpath build\dist --workpath build\pyinstaller || exit /b 1
 echo.
-echo Pronto: build\dist\Extended DJ\Extended DJ.exe
+echo Pronto: build\dist\RD Extended DJ\RD Extended DJ.exe

@@ -1,4 +1,4 @@
-# Receita do PyInstaller: gera build/dist/Extended DJ/Extended DJ.exe (pasta, não arquivo único:
+# Receita do PyInstaller: gera build/dist/RD Extended DJ/RD Extended DJ.exe (pasta, não arquivo único:
 # com o PyTorch dentro, um .exe único levaria quase um minuto descompactando a cada abertura).
 # Rode pelo empacotar/construir.bat.
 from pathlib import Path
@@ -42,9 +42,9 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Extended DJ",
+    name="RD Extended DJ",
     icon=str(RAIZ / "empacotar/icone.ico"),
     console=False,
     upx=False,
 )
-coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="Extended DJ")
+coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="RD Extended DJ")

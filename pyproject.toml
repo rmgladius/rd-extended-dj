@@ -1,5 +1,5 @@
 [project]
-name = "extdj"
+name = "rd-extended-dj"
 version = "0.1.0"
 description = "Gera intro e outro em loop (extended) para mixar em beat match"
 readme = "README.md"

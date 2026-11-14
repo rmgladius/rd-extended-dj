@@ -1,4 +1,4 @@
-# extended-dj
+# RD Extended DJ
 
 Cria versões extended de músicas para mixar em beat match: um intro e um outro em loop,
 do tamanho que você escolher, encaixados na grade de batidas da música original.
@@ -33,7 +33,7 @@ Discogs-EffNet (18 MB, de um servidor lento: pode levar alguns minutos).
 
 ## Programa com janela
 
-No Windows, o `Extended DJ.exe` (veja [Gerar o .exe](#gerar-o-exe)) abre direto. O caminho é:
+No Windows, o `RD Extended DJ.exe` (veja [Gerar o .exe](#gerar-o-exe)) abre direto. O caminho é:
 
 1. arraste as músicas (ou uma pasta) para a janela, ou clique em **Adicionar**;
 2. cada música é analisada na hora: BPM, tom em Camelot, estilo, batida e onde a voz entra;
@@ -163,7 +163,7 @@ Roda no Windows (o PyInstaller não gera .exe a partir do Linux):
    em `build\modelos` (ou use `empacotar/juntar_modelos.py` num ambiente que já os tenha
    baixado) e chama o PyInstaller.
 
-Sai em `build\dist\Extended DJ\`: a pasta inteira é o programa (o .exe precisa das pastas ao
+Sai em `build\dist\RD Extended DJ\`: a pasta inteira é o programa (o .exe precisa das pastas ao
 lado). Com o PyTorch com CUDA dentro, ela tem uns 5 GB e funciona em qualquer Windows 10 ou
 11 de 64 bits; com placa NVIDIA usa a placa, sem ela usa o processador (a separação de uma
 música de 3 minutos leva perto de 80 s em vez de 8 s).
@@ -171,7 +171,7 @@ música de 3 minutos leva perto de 80 s em vez de 8 s).
 Para conferir um pacote sem abrir a janela:
 
 ```bat
-"Extended DJ.exe" --teste musica.mp3 --saida-teste C:\pasta
+"RD Extended DJ.exe" --teste musica.mp3 --saida-teste C:\pasta
 ```
 
 O resultado vai para `%LOCALAPPDATA%\extdj\cache\extdj.log`.
@@ -189,3 +189,7 @@ uv run pytest
 - Discogs-EffNet, MTG / Universitat Pompeu Fabra (CC BY-NC-SA 4.0, uso sem fins comerciais)
 - pywebview (BSD) e WebView2 da Microsoft, para a janela
 - FFmpeg (LGPL ou GPL, conforme o build usado no .exe)
+
+---
+
+Feito por [Rodrigo Dias](https://github.com/rmgladius). Contato e versão no botão **Sobre**, no topo da janela.

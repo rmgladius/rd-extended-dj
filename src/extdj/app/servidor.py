@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+from .. import __version__
 from .sessao import OpcoesInvalidas, Sessao
 
 PASTA_UI = Path(__file__).resolve().parent / "ui"
@@ -173,7 +174,7 @@ class Manipulador(BaseHTTPRequestHandler):
 
     def _pagina(self) -> None:
         html = (PASTA_UI / "index.html").read_text(encoding="utf-8")
-        html = html.replace("__TOKEN__", self.server.token)
+        html = html.replace("__TOKEN__", self.server.token).replace("__VERSAO__", __version__)
         corpo = html.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")

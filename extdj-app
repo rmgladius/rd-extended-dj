@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-# Abre a tela do Extended DJ no navegador (no WSL não há janela própria).
+# Abre a tela do RD Extended DJ no navegador (no WSL não há janela própria).
 export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$HOME/.venvs/extended-dj}"
 exec uv run --project "$(dirname "$(readlink -f "$0")")" -q extdj-app --navegador "$@"

@@ -1,4 +1,4 @@
-"""Ponto de entrada do programa empacotado (Extended DJ.exe)."""
+"""Ponto de entrada do programa empacotado (RD Extended DJ.exe)."""
 
 import sys
 
