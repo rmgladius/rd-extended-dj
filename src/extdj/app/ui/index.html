@@ -20,7 +20,8 @@
     <span id="cache"></span>
     <button id="btn-limpar" class="link">limpar</button>
     <span class="sep"></span>
-    <button id="btn-sobre" class="topo-btn" title="Sobre o programa e contato" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></svg>Sobre</button>
+    <button class="topo-btn apoiar" data-abrir="apoio" title="Apoiar o projeto com um Pix" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/></svg>Apoiar</button>
+    <button class="topo-btn" data-abrir="sobre" title="Sobre o programa e contato" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></svg>Sobre</button>
   </div>
 </header>
 
@@ -220,7 +221,7 @@
 <div id="soltar" class="soltar" hidden><div>Solte para adicionar</div></div>
 <div id="aviso" class="aviso" hidden></div>
 
-<!-- Sobre: cobre a janela; fecha com Esc, com o X ou com um clique fora do cartão (sobre.js) -->
+<!-- Sobre: cobre a janela; fecha com Esc, com o X ou com um clique fora do cartão (paineis.js) -->
 <div id="sobre" class="painel-sobre" hidden>
   <div class="sobre-cartao" role="dialog" aria-modal="true" aria-labelledby="sobre-nome" tabindex="-1">
     <div class="sobre-cab">
@@ -241,9 +242,9 @@
     <span class="sobre-cidade">Florianópolis, SC</span>
 
     <div class="contatos">
-      <button class="contato" id="contato-email" data-email="rmdiasvieira@icloud.com" title="Copiar o e-mail">
+      <button class="contato" data-copiar="rmdiasvieira@icloud.com" data-copiado="E-mail copiado" title="Copiar o e-mail">
         <span class="contato-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7.5 8 5.5 8-5.5"/></svg></span>
-        <span class="contato-texto"><small id="email-rotulo">E-mail</small><b>rmdiasvieira@icloud.com</b></span>
+        <span class="contato-texto"><small>E-mail</small><b>rmdiasvieira@icloud.com</b></span>
         <span class="contato-acao"><svg class="ic-copiar" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg><svg class="ic-copiado" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>
       </button>
       <a class="contato" href="https://github.com/rmgladius" target="_blank" rel="noopener" title="Abrir no navegador">
@@ -264,8 +265,43 @@
       <a href="https://github.com/rmgladius/rd-extended-dj" target="_blank" rel="noopener" title="O projeto no GitHub">Código-fonte</a>
       <span>·</span>
       <a href="https://github.com/rmgladius/rd-extended-dj/issues" target="_blank" rel="noopener" title="Abrir um chamado no GitHub">Relatar um problema</a>
+      <span>·</span>
+      <button data-abrir="apoio" title="Ver o QR e a chave Pix">Apoiar com Pix</button>
     </div>
-    <p class="sobre-nota">Usa Demucs, beat_this, Discogs-EffNet e FFmpeg. Gratuito e sem fins comerciais, como pede a licença do Discogs-EffNet.</p>
+    <p class="sobre-nota">Usa Demucs, beat_this, Discogs-EffNet, FFmpeg e segno. Gratuito e sem fins comerciais, como pede a licença do Discogs-EffNet.</p>
+  </div>
+</div>
+
+<!-- Apoiar: Pix pelo QR, pelo copia e cola ou pela chave. O servidor põe o código e o QR (pix.py). -->
+<div id="apoio" class="painel-sobre" hidden>
+  <div class="sobre-cartao" role="dialog" aria-modal="true" aria-labelledby="apoio-nome" tabindex="-1">
+    <div class="sobre-cab">
+      <div class="sobre-icone apoio-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/></svg></div>
+      <div class="sobre-nome">
+        <h2 id="apoio-nome">Apoie o projeto</h2>
+        <p>Pix de qualquer valor</p>
+      </div>
+      <button class="sobre-fechar" data-fechar title="Fechar (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+
+    <p class="sobre-texto">O RD Extended DJ é gratuito. Se ele foi útil para você, dá para contribuir com o valor que quiser.</p>
+
+    <!-- Fundo branco com a margem que os leitores de QR precisam (4 módulos) -->
+    <div class="qr-pix">__PIX_QR__</div>
+    <p class="qr-dica">Aponte a câmera do app do banco</p>
+
+    <div class="contatos">
+      <button class="contato" data-copiar="__PIX_CODIGO__" data-copiado="Código copiado" title="Copiar o código para colar no app do banco">
+        <span class="contato-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/></svg></span>
+        <span class="contato-texto"><small>Pix copia e cola</small><b>Copiar o código</b></span>
+        <span class="contato-acao"><svg class="ic-copiar" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg><svg class="ic-copiado" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>
+      </button>
+      <button class="contato" data-copiar="__PIX_CHAVE__" data-copiado="Chave copiada" title="Copiar a chave">
+        <span class="contato-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.2-8.2M16 7l2.5 2.5M13.5 9.5 15.5 11.5"/></svg></span>
+        <span class="contato-texto"><small>Chave aleatória</small><b class="chave">__PIX_CHAVE__</b></span>
+        <span class="contato-acao"><svg class="ic-copiar" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg><svg class="ic-copiado" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>
+      </button>
+    </div>
   </div>
 </div>
 </body>

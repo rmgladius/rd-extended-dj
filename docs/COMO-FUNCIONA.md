@@ -44,6 +44,7 @@ um servidor lento: pode levar alguns minutos).
 | `src/extdj/extender.py` | escolha dos loops e montagem do extended |
 | `src/extdj/exportar.py`, `audio.py` | gravação em WAV, AIFF, FLAC ou MP3 com as tags |
 | `src/extdj/cli.py` | linha de comando |
+| `src/extdj/pix.py` | código e QR do Pix do botão Apoiar (BR Code do Banco Central) |
 | `src/extdj/app/` | janela: servidor local (`servidor.py`, `sessao.py`), pywebview (`janela.py`) e a página em `ui/` |
 | `empacotar/` | receita do PyInstaller e o `construir.bat` |
 | `docs/fonte/` | geradores das imagens do README |
@@ -206,4 +207,5 @@ As imagens saem do próprio programa, com cinco músicas de nome e artista fict�
 - Demucs, Alexandre Défossez / Meta (MIT)
 - Discogs-EffNet, MTG / Universitat Pompeu Fabra (CC BY-NC-SA 4.0, uso sem fins comerciais)
 - pywebview (BSD) e WebView2 da Microsoft, para a janela
+- segno (BSD), para o QR do Pix
 - FFmpeg (LGPL ou GPL, conforme o build usado no .exe)

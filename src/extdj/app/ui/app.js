@@ -1,5 +1,5 @@
 import { Onda } from './onda.js';
-import { sobreAberto } from './sobre.js';
+import { painelAberto } from './paineis.js';
 
 const TOKEN = window.EXTDJ_TOKEN;
 const $ = (s, el = document) => el.querySelector(s);
@@ -807,7 +807,7 @@ $('#ir-saida').addEventListener('click', () => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (sobreAberto() || e.target.closest('input, select, textarea')) return;
+  if (painelAberto() || e.target.closest('input, select, textarea')) return;
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === 'KeyZ') {
     e.preventDefault();
     desfazer();
